@@ -65,7 +65,35 @@ Rule: **no threshold, weight, holiday or account code hardcoded in TypeScript.**
 | Logging | Pino, bundled with Fastify. An `onRequest` hook stamps `runId` into the child logger |
 | `scripts/scrub.ts` | Anonymises emails, partial PANs and names before a fixture enters the repo |
 
-### 4.5 The contract-test harness
+### 4.5 Persistence
+
+Postgres, append-only, one row per fact and nothing overwritten. Runs are not replaced, they are compared — which is what lets the system answer "why did it say something different yesterday?".
+
+| Table | Holds |
+|---|---|
+| `runs` | One row per execution: id, started at, ruleset version, input hashes |
+| `raw_records` | The bytes as received, with their content hash |
+| `movements` | The canonical ledger, keyed by content-derived id |
+| `batches` | Settlement batches and their deductions |
+| `matches` | Channel-to-bank results with evidence and alternatives |
+
+Every table carries `run_id`. Upserts are keyed on the deterministic ids, so re-running an ingestion is a no-op rather than a duplication.
+
+**Two ports are still missing:** `BatchRepository` and `MatchRepository`. Phase 2 currently computes a report and returns it in memory, with nowhere to put what it produced.
+
+**The `runId` lifecycle is undecided.** The type exists and travels through every result, but nothing creates or closes a run yet. That has to be settled before the API can serve more than one.
+
+**Testing against a real database.** Contract suites have to run against Postgres or they prove nothing, which collides with domain tests staying Docker-free. The scripts split:
+
+```
+pnpm test              → unit and domain, in-memory, milliseconds, no Docker
+pnpm test:integration  → contract suites against a real Postgres
+make check             → both
+```
+
+Testcontainers starts and disposes a container per run, so integration tests never depend on someone having run `make up` first, and never leave state behind. The cost is that `test:integration` needs Docker running; the everyday fast path does not.
+
+### 4.6 The contract-test harness
 
 This is what makes the whole ports-and-adapters strategy safe. For each port we write **one** suite describing expected semantics — ordering, idempotency, empty-range behaviour, error handling — and run it against every implementation, real and fixture-backed. The day a `SapErpGateway` appears, adding one line tells us whether it genuinely honours the contract, including semantics no type system can express.
 

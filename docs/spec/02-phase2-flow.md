@@ -56,6 +56,8 @@ The **implied** deduction path (derived from the difference against the deposit)
 | `SubsetSumFallbackRule` | class | Bounded fallback (§4.7) |
 | `RuleSet` | class | Loads rules, weights, tolerances and window from `config/ruleset.v1.json`. Exposes `version` |
 | `ReconcileFlow` | class (use case) | Orchestrates: build batches → generate candidates → assign → score → persist |
+| `BatchRepository` | port | **Not yet built.** Nowhere to store the batches a run produced |
+| `MatchRepository` | port | **Not yet built.** Same for the results, so runs cannot be compared |
 
 Adding a rule means adding a class and a ruleset entry. The engine does not change.
 
