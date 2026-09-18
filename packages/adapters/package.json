@@ -1,0 +1,25 @@
+{
+  "name": "@aa/adapters",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aa/core": "workspace:*",
+    "drizzle-orm": "^0.36.0",
+    "pdfjs-dist": "^4.8.69",
+    "pg": "^8.13.0",
+    "undici": "^6.20.0",
+    "xlsx": "^0.18.5"
+  },
+  "_comment": "The infrastructure ring. Having many dependencies is its job. Holds wompi/, bancolombia/, odoo/, persistence/, fs/, http/.",
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}

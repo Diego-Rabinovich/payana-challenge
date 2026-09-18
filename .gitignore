@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Generated output
+data/out/*
+!data/out/.gitkeep
+
+# Raw, unscrubbed inputs. See ADR-0012.
+data/raw/
+
+coverage/
+.vitest/
+.DS_Store

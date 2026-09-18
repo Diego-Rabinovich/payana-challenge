@@ -1,0 +1,14 @@
+{
+  "name": "@aa/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {},
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "_comment": "DTOs only. No logic, no classes, and no dependency on @aa/core. This is the front/back boundary. See ADR-0010."
+}

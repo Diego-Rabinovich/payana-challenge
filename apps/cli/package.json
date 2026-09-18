@@ -1,0 +1,18 @@
+{
+  "name": "@aa/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "aa": "./src/main.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "demo": "tsx src/main.ts demo"
+  },
+  "dependencies": {
+    "@aa/core": "workspace:*",
+    "@aa/adapters": "workspace:*"
+  },
+  "_comment": "Argument parsing via node:util parseArgs (built in). Zero CLI dependencies."
+}

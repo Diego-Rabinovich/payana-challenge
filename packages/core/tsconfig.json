@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    // node:crypto (deterministic ids) and node:assert. Standard library, not
+    // infrastructure — the same reasoning as the Temporal polyfill, ADR-0011.
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

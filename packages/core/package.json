@@ -1,0 +1,20 @@
+{
+  "name": "@aa/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1"
+  },
+  "_comment": "Single dependency: a date primitive (the java.time equivalent), not infrastructure. See ADR-0011. No fastify, pg, drizzle, axios or pdf here.",
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}
