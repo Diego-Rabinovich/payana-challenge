@@ -1,0 +1,73 @@
+{
+  "description": "Declared ingestion sources. Adding one is an entry here plus a parser — never a change in core or in the pipeline. See docs/ADDING-A-SOURCE.md.",
+
+  "sources": [
+    {
+      "id": "bancolombia:statement",
+      "account": {
+        "id": "bancolombia:00000000000",
+        "kind": "BANK",
+        "name": "Bancolombia — Alimentos Alcázar SAS",
+        "currency": "COP",
+        "externalRef": "00000000000"
+      },
+      "connector": { "type": "local-file", "glob": "data/fixtures/bancolombia/*.pdf" },
+      "parser": "bancolombia-statement",
+      "cadence": "monthly"
+    },
+    {
+      "id": "wompi:transactions",
+      "account": {
+        "id": "wompi:AA",
+        "kind": "GATEWAY",
+        "name": "Wompi — Alimentos Alcázar",
+        "currency": "COP"
+      },
+      "connector": {
+        "type": "http-api",
+        "live": { "baseUrlEnv": "WOMPI_BASE_URL", "path": "/transactions", "authEnv": "WOMPI_PRIVATE_KEY" },
+        "fixtures": { "glob": "data/fixtures/wompi/transactions-*.json" }
+      },
+      "parser": "wompi-transaction",
+      "cadence": "daily"
+    },
+    {
+      "id": "wompi:events",
+      "account": { "ref": "wompi:AA" },
+      "connector": {
+        "type": "webhook-inbox",
+        "secretEnv": "WOMPI_EVENTS_SECRET",
+        "fixtures": { "glob": "data/fixtures/wompi/events-*.json" }
+      },
+      "parser": "wompi-event",
+      "cadence": "realtime",
+      "note": "Demonstrates the push transport. Driven by recorded payloads: the panel's events URL points at Payana's live integration and must not be repointed. See ADR-0012."
+    },
+    {
+      "id": "odoo:journal-48",
+      "account": {
+        "id": "erp:journal:48",
+        "kind": "ERP",
+        "name": "Odoo — Wompi Tarjetas",
+        "currency": "COP",
+        "externalRef": "48"
+      },
+      "connector": { "type": "odoo-rpc", "journalEnv": "ODOO_JOURNAL_WOMPI" },
+      "parser": "odoo-move",
+      "cadence": "on-demand"
+    },
+    {
+      "id": "odoo:journal-49",
+      "account": {
+        "id": "erp:journal:49",
+        "kind": "ERP",
+        "name": "Odoo — Bancolombia",
+        "currency": "COP",
+        "externalRef": "49"
+      },
+      "connector": { "type": "odoo-rpc", "journalEnv": "ODOO_JOURNAL_BANCOLOMBIA" },
+      "parser": "odoo-move",
+      "cadence": "on-demand"
+    }
+  ]
+}

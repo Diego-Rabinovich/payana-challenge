@@ -1,0 +1,49 @@
+{
+  "description": "Bank statement descriptor patterns, matched in order. This file says what the document SAYS — a movement type and a counterparty name. It deliberately says nothing about which channel a credit belongs to or whether it is in scope: those are reconciliation conclusions, and letting ingestion decide them would make the confidence score circular. See ADR-0002.",
+
+  "rules": [
+    {
+      "id": "wompi-settlement",
+      "match": { "startsWith": "PAGO DE PROV WOMPI" },
+      "type": "TRANSFER_IN",
+      "counterparty": "WOMPI S.A.S."
+    },
+    {
+      "id": "savings-interest",
+      "match": { "startsWith": "ABONO INTERESES" },
+      "type": "INTEREST",
+      "counterparty": "BANCOLOMBIA"
+    },
+    {
+      "id": "account-fee-vat",
+      "match": { "startsWith": "IVA CUOTA MANEJO" },
+      "type": "TAX",
+      "counterparty": "BANCOLOMBIA",
+      "note": "Listed before the fee rule so the more specific prefix wins."
+    },
+    {
+      "id": "account-fee",
+      "match": { "startsWith": "CUOTA MANEJO" },
+      "type": "FEE",
+      "counterparty": "BANCOLOMBIA"
+    },
+    {
+      "id": "interbank-transfer-in",
+      "match": { "startsWith": "PAGO INTERBANC" },
+      "type": "TRANSFER_IN",
+      "counterpartyFrom": { "afterPrefix": "PAGO INTERBANC " },
+      "note": "The payer's name follows the prefix. Captured as a fact; whether it is a channel we track is for Phase 2 to decide."
+    },
+    {
+      "id": "statement-withholding",
+      "match": { "contains": "RETEFUENTE" },
+      "type": "WITHHOLDING",
+      "counterparty": "BANCOLOMBIA"
+    }
+  ],
+
+  "fallback": {
+    "type": "OTHER",
+    "emits": "DESCRIPTOR_UNCLASSIFIED"
+  }
+}

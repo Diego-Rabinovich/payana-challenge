@@ -1,0 +1,61 @@
+{
+  "version": "v1",
+  "description": "Phase 2 matching rubric. Every number here is a proposal to be calibrated against the first days of real data, not a truth. The version travels in every MatchResult so a result can always be reproduced. See ADR-0005.",
+
+  "settlementWindow": {
+    "fromBusinessDays": 1,
+    "toBusinessDays": 3,
+    "basis": "BUSINESS_DAYS"
+  },
+
+  "tolerances": {
+    "roundingCents": 10000,
+    "identityCents": 1,
+    "impliedFeeRateBand": [0.02, 0.05]
+  },
+
+  "weights": {
+    "AMOUNT_EXACT": 50,
+    "AMOUNT_WITHIN_ROUNDING": 30,
+    "IMPLIED_FEE_IN_BAND": 25,
+    "DATE_T1_EXACT": 25,
+    "DATE_IN_WINDOW": 15,
+    "DESCRIPTOR_MATCH": 15,
+    "UNIQUE_CANDIDATE": 10,
+    "IDENTITY_HOLDS": 10
+  },
+
+  "exclusiveDimensions": {
+    "AMOUNT": ["AMOUNT_EXACT", "AMOUNT_WITHIN_ROUNDING", "IMPLIED_FEE_IN_BAND"],
+    "DATE": ["DATE_T1_EXACT", "DATE_IN_WINDOW"]
+  },
+
+  "bands": {
+    "CONFIRMED": 85,
+    "PROBABLE": 60,
+    "AMBIGUOUS": 40
+  },
+
+  "ambiguityDelta": 10,
+
+  "subsetSum": {
+    "maxSubsetSize": 60,
+    "maxSolutions": 5,
+    "toleranceCents": 100,
+    "maxNodes": 200000
+  },
+
+  "channels": {
+    "wompi": {
+      "counterpartyPatterns": ["WOMPI"]
+    },
+    "pos": {
+      "counterpartyPatterns": ["REDEBAN", "CREDIBANCO"]
+    },
+    "druo": {
+      "counterpartyPatterns": ["DRUO"]
+    }
+  },
+
+  "channelNotes": "Patterns say how a channel names itself on a bank statement. This is reconciliation policy, not an ingestion fact: config/descriptors.json records the counterparty a descriptor names, and this decides whether that name is the channel we expected. Keeping them apart is what stops DESCRIPTOR_MATCH from scoring a conclusion ingestion already reached."
+}
