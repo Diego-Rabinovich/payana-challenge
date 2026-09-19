@@ -33,6 +33,22 @@ export const ReconciliationDto = z.object({
     impliedDeductionRate: z.number().optional(),
   }),
   window: z.object({ from: IsoDate, to: IsoDate, basis: z.literal('BUSINESS_DAYS') }),
+  /**
+   * The breakdown recovered from the gap when the gateway reported none.
+   *
+   * Kept apart from `amounts` on purpose: a reader has to be able to tell a
+   * figure the source stated from one this system computed. See ADR-0013.
+   */
+  derivedDeductions: z
+    .object({
+      fee: MoneyDto,
+      tax: MoneyDto,
+      withholding: MoneyDto,
+      total: MoneyDto,
+      impliedRate: z.number(),
+      consistent: z.boolean(),
+    })
+    .optional(),
   confidence: ConfidenceDto,
   alternatives: z.array(
     z.object({
@@ -53,12 +69,44 @@ export const UnattributedCreditDto = z.object({
   reason: z.string(),
 });
 
+/**
+ * The funnel, which is the first thing anyone reads.
+ *
+ * `deductionsAreDerived` is not decoration: a reader has to be able to tell a
+ * commission the gateway stated from one this system inferred from the gap,
+ * and the panel says so out loud rather than presenting both as the same
+ * kind of number.
+ */
 export const ReconciliationSummaryDto = z.object({
+  runId: z.string().optional(),
+  rulesetVersion: z.string(),
   batches: z.number().int(),
   byStatus: z.record(z.string(), z.number().int()),
+  gross: MoneyDto,
+  deductions: MoneyDto,
+  deductionsAreDerived: z.boolean(),
   expectedNet: MoneyDto,
   observedNet: MoneyDto,
   unexplained: MoneyDto,
+  unattributed: z.object({
+    channel: z.number().int().describe('Credits from the channel nobody claimed'),
+    channelAmount: MoneyDto,
+    other: z.number().int().describe('Credits from anyone else. Noise, kept visible'),
+  }),
+});
+
+/**
+ * One page of a finite collection.
+ *
+ * Offset rather than cursor, unlike the ledger: these collections are a run's
+ * results, bounded and already in memory, and a reader needs to know there
+ * are 56 of them. A cursor would hide the total, which is the number the
+ * screen is actually about.
+ */
+export const OffsetPageDto = z.object({
+  total: z.number().int(),
+  offset: z.number().int(),
+  limit: z.number().int(),
 });
 
 /** The correction a discrepancy implies, balanced and ready to post. */
@@ -124,3 +172,5 @@ export type ErpReconciliationLineDto = z.infer<typeof ErpReconciliationLineDto>;
 export type ErpReconciliationDto = z.infer<typeof ErpReconciliationDto>;
 export type ProposedEntryDto = z.infer<typeof ProposedEntryDto>;
 export type UnattributedCreditDto = z.infer<typeof UnattributedCreditDto>;
+export type ReconciliationSummaryDto = z.infer<typeof ReconciliationSummaryDto>;
+export type OffsetPageDto = z.infer<typeof OffsetPageDto>;

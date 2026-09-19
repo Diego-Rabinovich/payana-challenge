@@ -1,4 +1,5 @@
 import type { AccountMap } from '../domain/account-map.js';
+import type { RuleSet } from '../domain/ruleset.js';
 import type { Account } from '../domain/account.js';
 import type { ErpReconciliationReport } from '../domain/erp-reconciliation.js';
 import type { MatchResult, ReconciliationReport } from '../domain/match-result.js';
@@ -83,6 +84,27 @@ export interface SourceStatus {
   readonly asOf?: string;
 }
 
+/** A bank statement sitting in the inbox, whether or not a run has read it. */
+export interface StatementFile {
+  readonly name: string;
+  readonly bytes: number;
+  readonly receivedAt: string;
+}
+
+/**
+ * The statement inbox.
+ *
+ * Phase 1 says a statement is an input someone provides, and until this
+ * existed the only way to provide one was to copy a file into the repository
+ * before starting the API — which meant the console showed a pipeline whose
+ * first step happened somewhere the user could not see.
+ */
+export interface StatementQueries {
+  list(): Promise<readonly StatementFile[]>;
+  /** Stores it for the next run. Ingestion is idempotent on content hash. */
+  add(input: { filename: string; content: Uint8Array }): Promise<StatementFile>;
+}
+
 export interface HealthQueries {
   sources(): Promise<readonly SourceStatus[]>;
 }
@@ -93,9 +115,12 @@ export interface ReadModel {
   readonly rulesetVersion: string;
   /** Exposed so a delivery mechanism can name accounts without guessing them. */
   readonly accountMap: AccountMap;
+  /** Same reason: whether a counterparty is the channel is policy, not UI logic. */
+  readonly ruleSet: RuleSet;
   readonly ledger: LedgerQueries;
   readonly flow: FlowQueries;
   readonly erp: ErpQueries;
   readonly runs: RunQueries;
+  readonly statements: StatementQueries;
   readonly health: HealthQueries;
 }

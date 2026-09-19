@@ -4,28 +4,30 @@ import { SourceBanner } from './components/States.js';
 import { useResource } from './lib/useResource.js';
 import { Dashboard } from './screens/Dashboard.js';
 import { ErpReconciliation } from './screens/ErpReconciliation.js';
-import { Exceptions } from './screens/Exceptions.js';
 import { Ledger } from './screens/Ledger.js';
 import { Lineage } from './screens/Lineage.js';
 import { NewRun } from './screens/NewRun.js';
-import { Settlements } from './screens/Settlements.js';
-
-const SECTIONS = [
-  { to: '/', label: 'Panel', end: true },
-  { to: '/corrida', label: 'Nueva corrida' },
-  { to: '/ledger', label: 'Ledger' },
-  { to: '/excepciones', label: 'Excepciones' },
-  { to: '/liquidaciones', label: 'Liquidaciones' },
-  { to: '/erp/wompi', label: 'ERP · Wompi' },
-  { to: '/erp/bancolombia', label: 'ERP · Bancolombia' },
-];
+import { Reconciliation } from './screens/Reconciliation.js';
+import { Unattributed } from './screens/Unattributed.js';
 
 /**
- * The shell: navigation, the source banner, and the routes.
+ * Five destinations, not seven.
  *
- * Routes exist rather than tabs because an exception is a thing you send to
- * someone — "mirá esta" has to survive being pasted into a chat.
+ * "Liquidaciones" and "Excepciones" were the same table twice, which made the
+ * navigation a list of implementation details rather than of questions. What
+ * is left maps to what someone actually wants: the answer, the detail behind
+ * it, what did not fit, what the ERP says, and the raw ledger.
  */
+const SECTIONS = [
+  { to: '/', label: 'Panel', end: true },
+  { to: '/conciliacion', label: 'Conciliación' },
+  { to: '/sin-atribuir', label: 'Sin atribuir' },
+  { to: '/erp/wompi', label: 'ERP · Wompi' },
+  { to: '/erp/bancolombia', label: 'ERP · Bancolombia' },
+  { to: '/ledger', label: 'Ledger' },
+  { to: '/corrida', label: 'Nueva corrida' },
+];
+
 export function App() {
   const health = useResource(() => api.health());
 
@@ -53,12 +55,15 @@ export function App() {
       <main>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/conciliacion" element={<Reconciliation />} />
+          <Route path="/sin-atribuir" element={<Unattributed />} />
           <Route path="/corrida" element={<NewRun />} />
           <Route path="/ledger" element={<Ledger />} />
-          <Route path="/excepciones" element={<Exceptions />} />
-          <Route path="/liquidaciones" element={<Settlements />} />
           <Route path="/movimientos/:movementId" element={<Lineage />} />
           <Route path="/erp/:journalKey" element={<ErpReconciliation />} />
+          {/* Old links keep working rather than dead-ending on the panel. */}
+          <Route path="/liquidaciones" element={<Navigate to="/conciliacion" replace />} />
+          <Route path="/excepciones" element={<Navigate to="/conciliacion" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

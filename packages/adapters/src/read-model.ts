@@ -15,6 +15,8 @@ import {
   traceMovement,
 } from '@aa/core';
 import { reviveErpReport, reviveFlowReport } from './persistence/revive.js';
+import { renderMarkdown } from './presentation/markdown-report.js';
+import { listStatements, saveStatement } from './fs/statement-inbox.js';
 import type { Dependencies } from './composition.js';
 
 /**
@@ -27,6 +29,9 @@ import type { Dependencies } from './composition.js';
  */
 export function buildReadModel(deps: Dependencies, version: string): ReadModel {
   const { repositories, accounts, useCases, ruleSet, accountMap, calendar } = deps;
+  // The same directory the file connector reads, so an uploaded statement is
+  // picked up by the next run with no further plumbing.
+  const statementDir = deps.statementDir;
 
   const accountList: Account[] = [
     { id: accounts.wompi, kind: 'GATEWAY', name: 'Wompi — Alimentos Alcázar', currency: 'COP' },
@@ -50,6 +55,7 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     version,
     rulesetVersion: ruleSet.version,
     accountMap,
+    ruleSet,
 
     health: {
       sources: async () => [
@@ -113,6 +119,11 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       },
     },
 
+    statements: {
+      list: async () => listStatements(statementDir),
+      add: async ({ filename, content }) => saveStatement(statementDir, filename, content),
+    },
+
     runs: {
       list: async (limit) => (await repositories.runs.list(limit)).map(toRunRecord),
       find: async (runId) => {
@@ -121,13 +132,15 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       },
       start: async ({ from, to }) => runPipeline(from, to),
       reportArtifact: async (runId, format) => {
-        const report = await repositories.reports.load<ReconciliationReport>(
-          asRunId(runId),
-          'flow',
-          'wompi',
-        );
-        if (!report) return undefined;
-        return format === 'json' ? JSON.stringify(report, null, 2) : undefined;
+        const stored = await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi');
+        if (!stored) return undefined;
+
+        // JSON goes out as stored; Markdown is rendered from the revived
+        // report by the same function the CLI writes to disk, so the download
+        // and the file cannot drift apart.
+        if (format === 'json') return JSON.stringify(stored, null, 2);
+        if (format === 'md') return renderMarkdown(reviveFlowReport(stored));
+        return undefined;
       },
     },
   };

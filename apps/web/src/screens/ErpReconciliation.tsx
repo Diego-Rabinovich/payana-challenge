@@ -2,8 +2,9 @@ import type { ErpReconciliationLineDto } from '@aa/contracts';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, show } from '../api/client.js';
+import { StatusChip } from '../components/Confidence.js';
+import { PeriodFilter, Pager, useFilter } from '../components/Filters.js';
 import { ProposedEntryTable } from '../components/ProposedEntryTable.js';
-import { StatusChip } from '../components/StatusChip.js';
 import { Empty, Resolved } from '../components/States.js';
 import { phraseFor } from '../lib/evidence-phrases.js';
 import { useResource } from '../lib/useResource.js';
@@ -13,7 +14,7 @@ const MATCH_LEVEL: Record<ErpReconciliationLineDto['matchLevel'], string> = {
   EXACT: 'por fecha y monto',
   AGGREGATED: 'agregado',
   APPROXIMATE: 'aproximado',
-  NONE: 'sin match',
+  NONE: 'sin correspondencia',
 };
 
 /**
@@ -23,10 +24,15 @@ const MATCH_LEVEL: Record<ErpReconciliationLineDto['matchLevel'], string> = {
  * answer: a match by reference is far stronger evidence than one by daily
  * aggregation, and a reader deciding whether to act needs to know which they
  * are looking at.
+ *
+ * Paginated in the browser rather than at the API: a journal comparison is one
+ * coherent artifact — the totals are of the whole thing — so it is fetched
+ * whole and windowed here.
  */
 export function ErpReconciliation() {
   const { journalKey = 'wompi' } = useParams<{ journalKey: 'wompi' | 'bancolombia' }>();
-  const [onlyProblems, setOnlyProblems] = useState(true);
+  const [filter, update] = useFilter({ limit: 25 });
+  const [open, setOpen] = useState<string | null>(null);
 
   const resource = useResource(
     () => api.erpReconciliation(journalKey as 'wompi' | 'bancolombia'),
@@ -36,115 +42,157 @@ export function ErpReconciliation() {
   return (
     <Resolved resource={resource} what="la conciliación contra el ERP">
       {(report) => {
-        const lines = onlyProblems
-          ? report.lines.filter((line) => line.status !== 'MATCHED')
-          : report.lines;
+        const matching = report.lines
+          .filter((line) => (filter.status === 'matched' ? line.status === 'MATCHED' : true))
+          .filter((line) =>
+            filter.status === 'problems' ? line.status !== 'MATCHED' : true,
+          )
+          .filter(
+            (line) =>
+              (filter.from === undefined || line.date >= filter.from) &&
+              (filter.to === undefined || line.date <= filter.to),
+          );
+
+        const rows = matching.slice(filter.offset, filter.offset + filter.limit);
 
         return (
-          <section>
-            <header className="section__header">
-              <h2>ERP · {report.journalName}</h2>
-              <p>
-                {report.totals.ledgerGroups} grupos del ledger contra {report.totals.erpEntries}{' '}
-                asientos · sin explicar {show(report.totals.unexplained)}
-              </p>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  checked={onlyProblems}
-                  onChange={(event) => setOnlyProblems(event.target.checked)}
-                />
-                Solo discrepancias
-              </label>
-            </header>
+          <div className="card">
+            <h2 className="card__title">ERP · {report.journalName}</h2>
+            <p className="card__hint">
+              {report.totals.ledgerGroups} grupos del ledger contra {report.totals.erpEntries}{' '}
+              asientos del diario {report.journalId}. Sin explicar{' '}
+              <strong>{show(report.totals.unexplained)}</strong>. Esta pantalla es de solo lectura:
+              nada se escribe en Odoo.
+            </p>
 
-            {lines.length === 0 ? (
-              <Empty title="Todo coincide">
-                Cada movimiento del ledger tiene su asiento y cada asiento su respaldo.
-              </Empty>
+            <div className="tiles" style={{ marginBottom: 16 }}>
+              {Object.entries(report.totals.byStatus).map(([status, count]) => (
+                <div className="tile" key={status}>
+                  <div className="tile__label">
+                    <StatusChip status={status} />
+                  </div>
+                  <div className="tile__value">{count}</div>
+                </div>
+              ))}
+            </div>
+
+            <PeriodFilter filter={filter} onChange={update}>
+              <label className="field">
+                <span>Mostrar</span>
+                <select
+                  value={filter.status ?? 'problems'}
+                  onChange={(event) => update({ status: event.target.value })}
+                >
+                  <option value="problems">Solo discrepancias</option>
+                  <option value="matched">Solo lo que coincide</option>
+                  <option value="all">Todo</option>
+                </select>
+              </label>
+            </PeriodFilter>
+
+            {rows.length === 0 ? (
+              <Empty>No hay líneas con esos filtros.</Empty>
             ) : (
-              <ul className="queue">
-                {lines.map((line, index) => (
-                  <ErpLine key={`${line.erpEntryId ?? 'none'}-${index}`} line={line} />
-                ))}
-              </ul>
+              <>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Criterio</th>
+                        <th>Asiento</th>
+                        <th className="num">Ledger</th>
+                        <th className="num">ERP</th>
+                        <th className="num">Δ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((line, index) => {
+                        const id = `${line.date}-${line.erpEntryId ?? index}`;
+                        return (
+                          <Row
+                            key={id}
+                            line={line}
+                            open={open === id}
+                            onToggle={() => setOpen(open === id ? null : id)}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <Pager
+                  page={{ total: matching.length, offset: filter.offset, limit: filter.limit }}
+                  onChange={update}
+                  noun="líneas"
+                />
+              </>
             )}
-          </section>
+          </div>
         );
       }}
     </Resolved>
   );
 }
 
-function ErpLine({ line }: { line: ErpReconciliationLineDto }) {
-  const [open, setOpen] = useState(false);
-  const headline = line.evidence[0] ? phraseFor(line.evidence[0]) : '';
-
+function Row({
+  line,
+  open,
+  onToggle,
+}: {
+  line: ErpReconciliationLineDto;
+  open: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <li className="queue__item">
-      <button
-        type="button"
-        className="queue__summary"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <StatusChip status={line.status} />
-        <span className="queue__date">{line.date}</span>
-        <span className="queue__headline">{headline}</span>
-        <span className="queue__amount">{show(line.delta ?? line.ledgerAmount)}</span>
-      </button>
+    <>
+      <tr className={open ? 'expandable expanded' : 'expandable'} onClick={onToggle}>
+        <td>{line.date}</td>
+        <td>
+          <StatusChip status={line.status} />
+        </td>
+        <td className="muted">{MATCH_LEVEL[line.matchLevel]}</td>
+        <td className="mono">{line.erpEntryName ?? '—'}</td>
+        <td className="num">{show(line.ledgerAmount)}</td>
+        <td className="num">{show(line.erpAmount)}</td>
+        <td className={`num ${(line.delta?.cents ?? 0) !== 0 ? 'neg' : ''}`}>{show(line.delta)}</td>
+      </tr>
 
       {open && (
-        <div className="queue__detail">
-          <dl className="pairs">
-            <div>
-              <dt>Criterio</dt>
-              <dd>{MATCH_LEVEL[line.matchLevel]}</dd>
-            </div>
-            <div>
-              <dt>Ledger</dt>
-              <dd>{show(line.ledgerAmount)}</dd>
-            </div>
-            <div>
-              <dt>ERP</dt>
-              <dd>
-                {show(line.erpAmount)}
-                {line.erpEntryName && <> · {line.erpEntryName}</>}
-              </dd>
-            </div>
-            <div>
-              <dt>Diferencia</dt>
-              <dd>{show(line.delta)}</dd>
-            </div>
-          </dl>
+        <tr>
+          <td className="detail-cell" colSpan={7}>
+            <div style={{ display: 'grid', gap: 14 }}>
+              <ul className="evidence">
+                {line.evidence.map((item, index) => (
+                  <li className="evidence__item" key={`${item.code}-${index}`}>
+                    <span
+                      aria-hidden="true"
+                      className={`evidence__mark evidence__mark--${item.passed ? 'ok' : 'no'}`}
+                    >
+                      {item.passed ? '✓' : '✗'}
+                    </span>
+                    <div className="evidence__text">{phraseFor(item)}</div>
+                    <div className="evidence__points">
+                      <code className="evidence__code">{item.code}</code>
+                    </div>
+                  </li>
+                ))}
+              </ul>
 
-          <ul className="evidence__list">
-            {line.evidence.map((item, index) => (
-              <li
-                key={`${item.code}-${index}`}
-                className={item.passed ? 'evidence__item' : 'evidence__item evidence__item--failed'}
-              >
-                <span aria-hidden="true" className="evidence__mark">
-                  {item.passed ? '✓' : '✗'}
-                </span>
-                <p className="evidence__phrase">{phraseFor(item)}</p>
-                <code className="evidence__code">{item.code}</code>
-              </li>
-            ))}
-          </ul>
+              {line.proposedEntry && (
+                <ProposedEntryTable entry={line.proposedEntry} writeEnabled={false} />
+              )}
 
-          {line.proposedEntry && (
-            <ProposedEntryTable entry={line.proposedEntry} writeEnabled={false} />
-          )}
-
-          {line.ledgerMovementIds.length > 0 && (
-            <p className="muted">
-              Movimientos: {line.ledgerMovementIds.map((id) => <code key={id}>{id} </code>)}
-            </p>
-          )}
-        </div>
+              {line.ledgerMovementIds.length > 0 && (
+                <div className="faint">
+                  Movimientos: {line.ledgerMovementIds.map((id) => id).join(', ')}
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
       )}
-    </li>
+    </>
   );
 }
-

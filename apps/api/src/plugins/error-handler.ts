@@ -25,6 +25,17 @@ export class NotFoundError extends Error {
   }
 }
 
+/**
+ * The caller sent something we will not accept.
+ *
+ * Distinct from a Fastify schema failure because the reason is semantic — the
+ * file is not a PDF, the name has no extension — and a 500 there tells a user
+ * the server broke when in fact they did.
+ */
+export class RejectedError extends Error {
+  readonly code = 'REJECTED';
+}
+
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
     const problem = describe(error, request.url);
@@ -56,6 +67,17 @@ function describe(error: unknown, instance: string) {
       type: `${PROBLEM_BASE}/not-found`,
       title: 'Resource not found',
       status: 404,
+      detail: error.message,
+      instance,
+      code: error.code,
+    };
+  }
+
+  if (error instanceof RejectedError) {
+    return {
+      type: `${PROBLEM_BASE}/rejected`,
+      title: 'Rejected',
+      status: 400,
       detail: error.message,
       instance,
       code: error.code,

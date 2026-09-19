@@ -5,11 +5,13 @@ import {
   EvidenceCodeInfoDto,
   HealthDto,
   RunDto,
+  StatementFileDto,
+  UploadStatementDto,
 } from '@aa/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { NotFoundError } from '../plugins/error-handler.js';
+import { NotFoundError, RejectedError } from '../plugins/error-handler.js';
 import type { ReadModel } from '@aa/core';
 
 export const runRoutes =
@@ -108,6 +110,47 @@ export const runRoutes =
               ? 'application/x-ndjson'
               : 'application/json';
         return reply.type(contentType).send(artifact);
+      },
+    );
+
+    app.get(
+      '/statements',
+      {
+        schema: {
+          tags: ['runs'],
+          summary: 'Bank statements the next run will read',
+          response: { 200: z.object({ statements: z.array(StatementFileDto) }) },
+        },
+      },
+      async () => ({ statements: [...(await deps.statements.list())] }),
+    );
+
+    app.post(
+      '/statements',
+      {
+        // A statement is a few hundred kilobytes; base64 inflates it by a
+        // third. The default 1 MB body limit rejects a perfectly ordinary
+        // April statement, which looks like a bug and is not one.
+        bodyLimit: 20 * 1024 * 1024,
+        schema: {
+          tags: ['runs'],
+          summary: 'Uploads a Bancolombia statement for the next run to ingest',
+          body: UploadStatementDto,
+          response: { 201: StatementFileDto },
+        },
+      },
+      async (request, reply) => {
+        const { filename, contentBase64 } = request.body;
+        const content = new Uint8Array(Buffer.from(contentBase64, 'base64'));
+
+        try {
+          const stored = await deps.statements.add({ filename, content });
+          void reply.status(201);
+          return stored;
+        } catch (cause) {
+          // "This is not a PDF" is the user's problem to fix, not a fault.
+          throw new RejectedError(cause instanceof Error ? cause.message : 'Archivo rechazado');
+        }
       },
     );
 

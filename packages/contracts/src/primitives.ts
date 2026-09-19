@@ -52,6 +52,10 @@ export const EvidenceDto = z.object({
   code: EvidenceCodeDto.describe('The vocabulary is closed; see GET /evidence-codes'),
   dimension: EvidenceDimensionDto,
   passed: z.boolean(),
+  applicable: z
+    .boolean()
+    .optional()
+    .describe('False when the check could not be run at all, as opposed to run and failed'),
   weight: z.number().optional(),
   expected: z.string().optional(),
   observed: z.string().optional(),
@@ -61,6 +65,9 @@ export const EvidenceDto = z.object({
 
 export const ConfidenceDto = z.object({
   score: z.number().int().min(0).max(100).describe('Normalised over the attainable maximum'),
+  disqualifiedBy: EvidenceCodeDto.optional().describe(
+    'A gate that failed. Forces UNMATCHED whatever the score',
+  ),
   band: z.enum(['CONFIRMED', 'PROBABLE', 'AMBIGUOUS', 'UNMATCHED']),
   earned: z.number(),
   attainable: z.number(),

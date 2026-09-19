@@ -48,28 +48,40 @@ export interface TraceInput {
 export function traceMovement(input: TraceInput): Lineage {
   const { charge, batch, charges, match, bankCredit } = input;
 
-  const attributedNet = attribute(charge, batch, charges);
+  // Against what actually landed where we know it, and against the expectation
+  // only when nothing did. Attributing the expected net was the reason this
+  // screen kept showing a charge's share as identical to its gross: Wompi
+  // reports no deductions, so the expected net *is* the gross, and the
+  // proportion of a number by itself is that number.
+  const settledTotal = match?.amounts?.observedNet ?? batch.expectedNet;
+  const attributedNet = attribute(charge, settledTotal, charges);
   const steps: LineageStep[] = [
     {
       stage: 'CHARGE',
       ref: charge.id,
       date: charge.valueDate,
       amount: charge.amount,
-      detail: `Pago aprobado por ${charge.amount.cents} centavos`,
+      detail: 'Pago aprobado en la pasarela',
     },
     {
       stage: 'BATCH',
       ref: batch.id,
       date: batch.batchDate,
       amount: batch.gross,
-      detail: `Liquidación del ${batch.batchDate.toString()}: ${charges.length} pagos`,
+      detail:
+        charges.length === 1
+          ? 'Un solo pago en este corte'
+          : `${charges.length} pagos liquidados juntos`,
     },
     {
       stage: 'SETTLEMENT',
       ref: batch.id,
       date: batch.batchDate,
-      amount: batch.expectedNet,
-      detail: `Neto esperado tras deducciones`,
+      amount: settledTotal,
+      detail:
+        match?.amounts?.observedNet !== undefined
+          ? 'Neto girado, ya descontadas las comisiones'
+          : 'Neto esperado; la fuente no informó deducciones',
     },
   ];
 
@@ -96,15 +108,15 @@ export function traceMovement(input: TraceInput): Lineage {
 }
 
 /**
- * This charge's slice of the batch net.
+ * This charge's slice of a settled total.
  *
- * Allocating the whole batch at once, rather than computing each share
- * independently, is what guarantees the shares add back up to the net: rounding
- * each one on its own would lose or invent cents at scale.
+ * Allocating the whole amount at once, rather than computing each share
+ * independently, is what guarantees the shares add back up to it: rounding each
+ * one on its own would lose or invent cents at scale.
  */
 export function attribute(
   charge: Movement,
-  batch: SettlementBatch,
+  total: Money,
   charges: readonly Movement[],
 ): Money {
   const ordered = [...charges].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -114,5 +126,5 @@ export function attribute(
   const weights = ordered.map((item) => Math.abs(item.amount.cents));
   if (weights.every((weight) => weight === 0)) return Money.zero();
 
-  return batch.expectedNet.allocate(weights)[index] ?? Money.zero();
+  return total.allocate(weights)[index] ?? Money.zero();
 }

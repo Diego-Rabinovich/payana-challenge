@@ -172,7 +172,7 @@ export function dateEvidence(
   const arrival = earliestDate(deposits);
   const gap = calendar.businessDaysBetween(batch.batchDate, arrival);
   const context = {
-    expected: `T+${fromBusinessDays} business days`,
+    expected: `T+${fromBusinessDays} día hábil`,
     observed: `T+${gap} (${deposits.map((deposit) => deposit.valueDate.toString()).join(', ')})`,
   };
 

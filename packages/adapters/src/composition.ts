@@ -76,6 +76,8 @@ export interface AppConfig {
 export interface Dependencies {
   readonly ruleSet: RuleSet;
   readonly accountMap: AccountMap;
+  /** Where bank statements are read from and uploaded to. */
+  readonly statementDir: string;
   readonly calendar: BusinessCalendar;
   readonly accounts: { readonly wompi: ReturnType<typeof accountId>; readonly bank: ReturnType<typeof accountId> };
   readonly sources: { readonly wompi: SourceId; readonly bank: SourceId };
@@ -125,9 +127,13 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
     privateKey: config.wompi.privateKey,
   });
 
+  // One directory, named once: the connector reads it and the upload writes
+  // to it, so a statement that arrives either way behaves the same.
+  const statementDir = join(config.dataDir, 'fixtures/bancolombia');
+
   const connectors = registryOf([
     new WompiTransactionsConnector(sources.wompi, wompiClient),
-    new LocalFileConnector(sources.bank, join(config.dataDir, 'fixtures/bancolombia'), '.pdf'),
+    new LocalFileConnector(sources.bank, statementDir, '.pdf'),
   ]);
 
   const parsers = parserRegistryOf([
@@ -152,6 +158,7 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
   return {
     ruleSet,
     accountMap,
+    statementDir,
     calendar,
     accounts,
     sources,

@@ -12,6 +12,22 @@ import {
   rawRecordId,
   sourceId,
 } from '@aa/core';
+import { RuleSet } from '@aa/core';
+
+/** The shipped ruleset shape, trimmed to what the stubs exercise. */
+function testRuleSet(): RuleSet {
+  return RuleSet.from({
+    version: 'v1-test',
+    settlementWindow: { fromBusinessDays: 1, toBusinessDays: 3 },
+    tolerances: { roundingCents: 10_000, identityCents: 1, impliedFeeRateBand: [0.02, 0.05] },
+    weights: { AMOUNT_EXACT: 50, DATE_T1_EXACT: 25 },
+    exclusiveDimensions: { AMOUNT: ['AMOUNT_EXACT'], DATE: ['DATE_T1_EXACT'] },
+    bands: { CONFIRMED: 85, PROBABLE: 60, AMBIGUOUS: 40 },
+    ambiguityDelta: 10,
+    subsetSum: { maxSubsetSize: 60, maxSolutions: 5, toleranceCents: 100, maxNodes: 200_000 },
+    channels: { wompi: { counterpartyPatterns: ['WOMPI'] } },
+  });
+}
 import { NotFoundError } from '../../src/plugins/error-handler.js';
 import type { ReadModel } from '@aa/core';
 import { AccountMap } from '@aa/core';
@@ -97,6 +113,7 @@ export function stubDependencies(): ReadModel {
     version: '0.1.0',
     rulesetVersion: 'v1-test',
     accountMap: stubAccountMap(),
+    ruleSet: testRuleSet(),
 
     health: {
       sources: async () => [{ id: 'wompi:transactions', mode: 'fixtures', state: 'ready' }],
@@ -127,6 +144,15 @@ export function stubDependencies(): ReadModel {
       erpReconciliation: async () => {
         throw new NotFoundError('ERP reconciliation');
       },
+    },
+
+    statements: {
+      list: async () => [{ name: 'Extracto_Abril.pdf', bytes: 512_000, receivedAt: '2026-05-01T00:00:00Z' }],
+      add: async ({ filename }) => ({
+        name: filename,
+        bytes: 1,
+        receivedAt: '2026-05-01T00:00:00Z',
+      }),
     },
 
     runs: {

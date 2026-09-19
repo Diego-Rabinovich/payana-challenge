@@ -19,9 +19,11 @@ export function ProposedEntryTable({
   const credits = entry.lines.reduce((total, line) => total + line.credit.cents, 0);
 
   return (
-    <div className="proposal">
-      <header className="proposal__header">
-        <h4>Asiento propuesto</h4>
+    <div>
+      <div className="section-title" style={{ marginTop: 0 }}>
+        Asiento que corregiría esta diferencia
+      </div>
+      <header style={{ display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 8 }}>
         <code>{entry.ref}</code>
         <span className="muted">
           diario {entry.journalId} · {entry.date}
@@ -34,13 +36,14 @@ export function ProposedEntryTable({
         </p>
       )}
 
-      <table className="table">
+      <div className="table-wrap">
+      <table>
         <thead>
           <tr>
             <th>Cuenta</th>
             <th>Concepto</th>
-            <th className="right">Débito</th>
-            <th className="right">Crédito</th>
+            <th className="num">Débito</th>
+            <th className="num">Crédito</th>
           </tr>
         </thead>
         <tbody>
@@ -50,25 +53,26 @@ export function ProposedEntryTable({
                 <code>{line.accountCode}</code> {line.accountName}
               </td>
               <td>{line.label}</td>
-              <td className="right">{line.debit.cents > 0 ? show(line.debit) : ''}</td>
-              <td className="right">{line.credit.cents > 0 ? show(line.credit) : ''}</td>
+              <td className="num">{line.debit.cents > 0 ? show(line.debit) : ''}</td>
+              <td className="num">{line.credit.cents > 0 ? show(line.credit) : ''}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className={debits === credits ? 'balanced' : 'unbalanced'}>
             <td colSpan={2}>{debits === credits ? 'Cuadra' : 'No cuadra'}</td>
-            <td className="right">{formatTotal(debits)}</td>
-            <td className="right">{formatTotal(credits)}</td>
+            <td className="num">{formatTotal(debits)}</td>
+            <td className="num">{formatTotal(credits)}</td>
           </tr>
         </tfoot>
       </table>
+      </div>
 
-      <button type="button" className="button" disabled={!writeEnabled}>
+      <button type="button" className="btn" disabled={!writeEnabled} style={{ marginTop: 12 }}>
         Crear asiento en Odoo
       </button>
       {!writeEnabled && (
-        <p className="muted">
+        <p className="faint">
           La escritura está deshabilitada (<code>ODOO_WRITE_ENABLED=false</code>). Este plan se
           puede revisar pero no se ejecuta.
         </p>

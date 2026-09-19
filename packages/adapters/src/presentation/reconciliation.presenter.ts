@@ -4,8 +4,10 @@ import type {
   EvidenceDto,
   ProposedEntryDto,
   ReconciliationDto,
+  ReconciliationSummaryDto,
   UnattributedCreditDto,
 } from '@aa/contracts';
+import { Money } from '@aa/core';
 import type {
   AccountMap,
   ErpCorrection,
@@ -13,9 +15,11 @@ import type {
   ErpReconciliationReport,
   Evidence,
   MatchResult,
+  ReconciliationReport,
   UnattributedCredit,
 } from '@aa/core';
 import { isMappable, toJournalEntry } from '../odoo/journal-entry-builder.js';
+import { formatMoney } from './money-format.js';
 import { toMoneyDto, toOptionalMoneyDto } from './money.presenter.js';
 
 export function toEvidenceDto(evidence: Evidence): EvidenceDto {
@@ -23,12 +27,28 @@ export function toEvidenceDto(evidence: Evidence): EvidenceDto {
     code: evidence.code,
     dimension: evidence.dimension,
     passed: evidence.passed,
+    ...(evidence.applicable !== undefined ? { applicable: evidence.applicable } : {}),
     ...(evidence.weight !== undefined ? { weight: evidence.weight } : {}),
-    ...(evidence.expected !== undefined ? { expected: evidence.expected } : {}),
-    ...(evidence.observed !== undefined ? { observed: evidence.observed } : {}),
-    ...(evidence.detail !== undefined ? { detail: evidence.detail } : {}),
+    ...(evidence.expected !== undefined ? { expected: humanise(evidence.expected) } : {}),
+    ...(evidence.observed !== undefined ? { observed: humanise(evidence.observed) } : {}),
+    ...(evidence.detail !== undefined ? { detail: humanise(evidence.detail) } : {}),
     ...(evidence.locator !== undefined ? { locator: evidence.locator } : {}),
   };
+}
+
+/**
+ * Rewrites the raw amounts inside an evidence string.
+ *
+ * The domain builds these with `Money.toString()`, whose canonical form is
+ * `COP 1290574000` — cents, no separators. On screen that reads as twelve
+ * thousand million pesos instead of twelve million, which is not a cosmetic
+ * problem. Formatting belongs at the edge, so it happens here rather than by
+ * teaching the value object about locales. See ADR-0008.
+ */
+function humanise(text: string): string {
+  return text.replace(/COP\s(-?\d+)/g, (_match, cents: string) =>
+    formatMoney(Money.ofCents(Number(cents))),
+  );
 }
 
 export function toReconciliationDto(match: MatchResult): ReconciliationDto {
@@ -55,6 +75,18 @@ export function toReconciliationDto(match: MatchResult): ReconciliationDto {
         ? { impliedDeductionRate: match.amounts.impliedDeductionRate }
         : {}),
     },
+    ...(match.derivedDeductions
+      ? {
+          derivedDeductions: {
+            fee: toMoneyDto(match.derivedDeductions.fee),
+            tax: toMoneyDto(match.derivedDeductions.tax),
+            withholding: toMoneyDto(match.derivedDeductions.withholding),
+            total: toMoneyDto(match.derivedDeductions.total),
+            impliedRate: match.derivedDeductions.impliedRate,
+            consistent: match.derivedDeductions.consistent,
+          },
+        }
+      : {}),
     window: {
       from: match.window.from.toString(),
       to: match.window.to.toString(),
@@ -62,6 +94,9 @@ export function toReconciliationDto(match: MatchResult): ReconciliationDto {
     },
     confidence: {
       score: match.confidence.score,
+      ...(match.confidence.disqualifiedBy
+        ? { disqualifiedBy: match.confidence.disqualifiedBy }
+        : {}),
       band: match.confidence.band,
       earned: match.confidence.earned,
       attainable: match.confidence.attainable,
@@ -113,6 +148,48 @@ export function toProposedEntryDto(
       credit: toMoneyDto(line.credit),
       label: line.label,
     })),
+  };
+}
+
+/**
+ * The funnel and the counts, in one object.
+ *
+ * Built here rather than in the browser: the UI summing a page of results
+ * would make the headline depend on how many rows happened to be loaded,
+ * which is exactly the kind of number that is wrong in a demo and worse in
+ * production.
+ */
+export function toReconciliationSummaryDto(
+  report: ReconciliationReport,
+  rulesetVersion: string,
+  channelPatterns: (counterparty: string | undefined) => boolean,
+): ReconciliationSummaryDto {
+  const fromChannel = report.unattributed.filter((credit) => channelPatterns(credit.counterparty));
+
+  // A report persisted before these totals existed has neither. Falling back
+  // rather than throwing matters because reports are kept, not migrated: an
+  // old run should still be readable, just less detailed.
+  const deductions = report.totals.deductions ?? Money.zero();
+  const gross = report.totals.gross ?? report.totals.expectedNet.plus(deductions);
+
+  return {
+    ...(report.runId ? { runId: report.runId } : {}),
+    rulesetVersion,
+    batches: report.totals.batches,
+    byStatus: { ...report.totals.byStatus },
+    gross: toMoneyDto(gross),
+    deductions: toMoneyDto(deductions),
+    deductionsAreDerived: report.totals.deductionsAreDerived ?? false,
+    expectedNet: toMoneyDto(report.totals.expectedNet),
+    observedNet: toMoneyDto(report.totals.observedNet),
+    unexplained: toMoneyDto(report.totals.unexplained),
+    unattributed: {
+      channel: fromChannel.length,
+      channelAmount: toMoneyDto(
+        fromChannel.reduce((total, credit) => total.plus(credit.amount), Money.zero()),
+      ),
+      other: report.unattributed.length - fromChannel.length,
+    },
   };
 }
 

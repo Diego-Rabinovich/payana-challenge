@@ -71,7 +71,9 @@ export async function buildApp(
     async (api) => {
       await api.register(runRoutes(deps));
       await api.register(ledgerRoutes(deps.ledger));
-      await api.register(reconciliationRoutes(deps.flow, deps.erp, deps.accountMap));
+      await api.register(
+        reconciliationRoutes(deps.flow, deps.erp, deps.accountMap, deps.ruleSet),
+      );
     },
     { prefix: API_PREFIX },
   );

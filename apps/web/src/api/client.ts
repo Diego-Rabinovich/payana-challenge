@@ -5,9 +5,12 @@ import type {
   LineageDto,
   MoneyDto,
   MovementDto,
+  OffsetPageDto,
   ReconciliationDto,
+  ReconciliationSummaryDto,
   RunDto,
   SettlementBatchDto,
+  StatementFileDto,
   UnattributedCreditDto,
 } from '@aa/contracts';
 
@@ -29,8 +32,11 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(path: string): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, { headers: { accept: 'application/json' } });
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: { accept: 'application/json', ...(init?.headers ?? {}) },
+  });
 
   if (!response.ok) {
     // Errors are RFC 9457, so a failure is as structured as a success and the
@@ -41,51 +47,88 @@ async function get<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
+const get = <T,>(path: string) => request<T>(path);
+
+const post = <T,>(path: string, body: unknown) =>
+  request<T>(path, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    const problem = await response.json().catch(() => ({}));
-    throw new ApiError(response.status, problem);
-  }
-  return (await response.json()) as T;
+
+/** Every paged collection answers with the rows and where they sit in the whole. */
+export interface Paged<T> {
+  readonly rows: readonly T[];
+  readonly page: OffsetPageDto;
+}
+
+export interface Window {
+  readonly from?: string;
+  readonly to?: string;
+  readonly limit?: number;
+  readonly offset?: number;
 }
 
 export const api = {
   health: () => get<HealthDto>('/health'),
 
+  summary: (runId?: string) =>
+    get<ReconciliationSummaryDto>(`/reconciliation-summary${query({ runId })}`),
+
   accounts: () => get<{ accounts: AccountDto[] }>('/accounts'),
 
-  movements: (accountId: string, params: { from?: string; to?: string; limit?: number } = {}) =>
+  movements: (accountId: string, params: Window = {}) =>
     get<{ movements: MovementDto[]; page: { nextCursor: string | null; count: number } }>(
-      `/accounts/${encodeURIComponent(accountId)}/movements${query({
-        ...params,
-        limit: params.limit ? String(params.limit) : undefined,
-      })}`,
+      `/accounts/${encodeURIComponent(accountId)}/movements${query({ ...params })}`,
     ),
 
   startRun: (body: { from: string; to: string }) => post<RunDto>('/runs', body),
 
-  reconciliations: (params: { status?: string; runId?: string } = {}) =>
-    get<{ reconciliations: ReconciliationDto[] }>(`/reconciliations${query(params)}`),
+  runs: (limit = 10) => get<{ runs: RunDto[] }>(`/runs${query({ limit })}`),
+
+  statements: () => get<{ statements: StatementFileDto[] }>('/statements'),
+
+  uploadStatement: (filename: string, contentBase64: string) =>
+    post<StatementFileDto>('/statements', { filename, contentBase64 }),
+
+  reconciliations: async (params: Window & { status?: string; runId?: string } = {}) => {
+    const body = await get<{ reconciliations: ReconciliationDto[]; page: OffsetPageDto }>(
+      `/reconciliations${query({ ...params })}`,
+    );
+    return { rows: body.reconciliations, page: body.page } satisfies Paged<ReconciliationDto>;
+  },
 
   reconciliation: (matchId: string) => get<ReconciliationDto>(`/reconciliations/${matchId}`),
 
-  settlementBatches: (params: { runId?: string } = {}) =>
-    get<{ batches: SettlementBatchDto[] }>(`/settlement-batches${query(params)}`),
+  settlementBatches: async (params: Window & { runId?: string } = {}) => {
+    const body = await get<{ batches: SettlementBatchDto[]; page: OffsetPageDto }>(
+      `/settlement-batches${query({ ...params })}`,
+    );
+    return { rows: body.batches, page: body.page } satisfies Paged<SettlementBatchDto>;
+  },
 
-  unattributedCredits: (params: { runId?: string } = {}) =>
-    get<{ credits: UnattributedCreditDto[] }>(`/unattributed-credits${query(params)}`),
+  unattributedCredits: async (
+    params: Window & { runId?: string; channel?: 'wompi' | 'other' | 'all' } = {},
+  ) => {
+    const body = await get<{ credits: UnattributedCreditDto[]; page: OffsetPageDto }>(
+      `/unattributed-credits${query({ ...params })}`,
+    );
+    return { rows: body.credits, page: body.page } satisfies Paged<UnattributedCreditDto>;
+  },
 
   movement: (movementId: string) => get<MovementDto>(`/movements/${movementId}`),
 
   lineage: (movementId: string) => get<LineageDto>(`/movements/${movementId}/lineage`),
 
   erpReconciliation: (journalKey: 'wompi' | 'bancolombia', params: { runId?: string } = {}) =>
-    get<ErpReconciliationDto>(`/erp-reconciliations/${journalKey}${query(params)}`),
+    get<ErpReconciliationDto>(`/erp-reconciliations/${journalKey}${query({ ...params })}`),
+
+  /** The Markdown report, as text. The caller decides what to do with it. */
+  reportMarkdown: async (runId: string): Promise<string> => {
+    const response = await fetch(`${BASE}/runs/${runId}/report?format=md`);
+    if (!response.ok) throw new ApiError(response.status, {});
+    return response.text();
+  },
 };
 
 function query(params: Record<string, string | number | undefined>): string {

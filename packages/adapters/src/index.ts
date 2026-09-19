@@ -9,6 +9,7 @@ export * from './persistence/pg-repositories.js';
 export * from './presentation/ledger.presenter.js';
 export * from './read-model.js';
 export * from './presentation/money-format.js';
+export * from './presentation/markdown-report.js';
 export * from './presentation/money.presenter.js';
 export * from './presentation/reconciliation.presenter.js';
 export * from './shared/decimal-text.js';

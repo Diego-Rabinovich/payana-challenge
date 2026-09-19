@@ -1,11 +1,10 @@
 import type { ConfidenceDto, HealthDto, ProposedEntryDto } from '@aa/contracts';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { EvidenceList } from './EvidenceList.js';
+import { ConfidenceMeter, EvidenceList, StatusChip } from './Confidence.js';
 import { MoneyFunnel, type FunnelStep } from './MoneyFunnel.js';
 import { ProposedEntryTable } from './ProposedEntryTable.js';
 import { Empty, Failed, Loading, SourceBanner } from './States.js';
-import { StatusChip } from './StatusChip.js';
 
 const money = (cents: number) => ({
   cents,
@@ -49,10 +48,15 @@ describe('EvidenceList (F05-T03)', () => {
   };
 
   it('shows a high score alongside the band that overrides it', () => {
-    render(<EvidenceList confidence={ambiguous} />);
-
     // A perfect score that is still ambiguous: the band has to be visible, or
     // a reader would take the 100 at face value.
+    render(
+      <>
+        <ConfidenceMeter confidence={ambiguous} />
+        <StatusChip status={ambiguous.band} />
+      </>,
+    );
+
     expect(screen.getByText('100')).toBeDefined();
     expect(screen.getByText('Ambiguo')).toBeDefined();
   });
@@ -64,16 +68,50 @@ describe('EvidenceList (F05-T03)', () => {
   });
 
   it('shows the raw score against what was attainable', () => {
-    render(<EvidenceList confidence={ambiguous} />);
-    expect(screen.getByText(/110 de 110 puntos posibles/)).toBeDefined();
+    render(<ConfidenceMeter confidence={ambiguous} />);
+    expect(screen.getByText(/110 de 110 puntos alcanzables/)).toBeDefined();
+  });
+
+  it('marks a check that could not be run as neither passed nor failed', () => {
+    // The distinction the score depends on: Wompi publishing no breakdown is
+    // not the same as a breakdown that failed to balance, and a red cross
+    // told people something had gone wrong when nothing had.
+    render(
+      <EvidenceList
+        confidence={{
+          ...ambiguous,
+          components: [
+            {
+              code: 'IDENTITY_BROKEN',
+              dimension: 'INTEGRITY',
+              passed: false,
+              applicable: false,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('no aplica')).toBeDefined();
+    expect(screen.queryByText('✗')).toBeNull();
+  });
+
+  it('says out loud when a gate disqualified the candidate', () => {
+    render(
+      <EvidenceList
+        confidence={{ ...ambiguous, band: 'UNMATCHED', disqualifiedBy: 'AMOUNT_MISMATCH' }}
+      />,
+    );
+
+    expect(screen.getByText(/Descalificada por/)).toBeDefined();
   });
 });
 
 describe('StatusChip', () => {
   it('never styles an ambiguous match as a success', () => {
     const { container } = render(<StatusChip status="AMBIGUOUS" />);
-    expect(container.querySelector('.chip--good')).toBeNull();
-    expect(container.querySelector('.chip--warn')).not.toBeNull();
+    expect(container.querySelector('.chip--confirmed')).toBeNull();
+    expect(container.querySelector('.chip--ambiguous')).not.toBeNull();
   });
 
   it('translates ERP statuses too, since the vocabulary is shared', () => {

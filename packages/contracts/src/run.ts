@@ -80,3 +80,25 @@ export type RunDto = z.infer<typeof RunDto>;
 export type RunSummaryDto = z.infer<typeof RunSummaryDto>;
 export type ProblemDto = z.infer<typeof ProblemDto>;
 export type HealthDto = z.infer<typeof HealthDto>;
+
+/** A bank statement waiting in the inbox for the next run. */
+export const StatementFileDto = z.object({
+  name: z.string(),
+  bytes: z.number().int(),
+  receivedAt: z.string(),
+});
+
+/**
+ * An upload, base64 in a JSON body.
+ *
+ * Multipart would be the conventional choice and would cost a dependency and
+ * a second parsing path. A monthly statement is under a megabyte, so the
+ * simpler shape carries it, and the browser already has the bytes.
+ */
+export const UploadStatementDto = z.object({
+  filename: z.string().min(1).max(200),
+  contentBase64: z.string().min(1),
+});
+
+export type StatementFileDto = z.infer<typeof StatementFileDto>;
+export type UploadStatementDto = z.infer<typeof UploadStatementDto>;

@@ -11,26 +11,37 @@ import type { Resource } from '../lib/useResource.js';
  * answers.
  */
 
-export function Loading({ what }: { what: string }) {
-  return <p className="muted">Cargando {what}…</p>;
+export function Loading({ what = 'los datos' }: { what?: string }) {
+  return <div className="state">Cargando {what}…</div>;
 }
 
-export function Failed({ message, hint }: { message: string; hint?: string }) {
+export function Failed({
+  resource,
+  message,
+  hint,
+}: {
+  resource?: Extract<Resource<unknown>, { state: 'failed' }>;
+  message?: string;
+  hint?: string;
+}) {
+  const text = resource?.message ?? message ?? 'La API no respondió.';
+  const note = resource?.hint ?? hint;
+
   return (
-    <section className="empty">
-      <h2>No se pudo leer esta información</h2>
-      <p>{message}</p>
-      {hint && <p className="muted">{hint}</p>}
-    </section>
+    <div className="state">
+      <div className="state__title">No se pudo leer esta información</div>
+      <p>{text}</p>
+      {note && <p className="faint">{note}</p>}
+    </div>
   );
 }
 
-export function Empty({ title, children }: { title: string; children: ReactNode }) {
+export function Empty({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <section className="empty">
-      <h2>{title}</h2>
+    <div className="state">
+      {title && <div className="state__title">{title}</div>}
       <p>{children}</p>
-    </section>
+    </div>
   );
 }
 
@@ -41,13 +52,11 @@ export function Resolved<T>({
   children,
 }: {
   resource: Resource<T>;
-  what: string;
+  what?: string;
   children: (data: T) => ReactNode;
 }) {
-  if (resource.state === 'loading') return <Loading what={what} />;
-  if (resource.state === 'failed') {
-    return <Failed message={resource.message} {...(resource.hint ? { hint: resource.hint } : {})} />;
-  }
+  if (resource.state === 'loading') return <Loading {...(what ? { what } : {})} />;
+  if (resource.state === 'failed') return <Failed resource={resource} />;
   return <>{children(resource.data)}</>;
 }
 
@@ -62,14 +71,14 @@ export function SourceBanner({ health }: { health: HealthDto }) {
   if (degraded.length === 0) return null;
 
   return (
-    <aside className="banner" role="status">
+    <aside className="banner banner--warn" role="status">
       {degraded.map((source) => (
-        <p key={source.id}>
+        <span key={source.id}>
           <strong>{source.id}</strong>{' '}
           {source.state === 'stale'
             ? `no respondió; estos datos son del ${source.asOf?.slice(0, 10) ?? 'último snapshot'}.`
             : 'no está disponible. Lo que sigue puede estar incompleto.'}
-        </p>
+        </span>
       ))}
     </aside>
   );

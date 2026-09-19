@@ -45,7 +45,7 @@ describe('attribute (F02-T13, F02-T16)', () => {
   it('splits the settlement net across the day’s payments', () => {
     const { charges, batch } = aDay();
 
-    const shares = charges.map((charge) => attribute(charge, batch, charges));
+    const shares = charges.map((charge) => attribute(charge, batch.expectedNet, charges));
 
     expect(shares.every((share) => share.isPositive())).toBe(true);
   });
@@ -53,7 +53,7 @@ describe('attribute (F02-T13, F02-T16)', () => {
   it('never loses or invents a cent: the shares sum to the net exactly', () => {
     const { charges, batch } = aDay();
 
-    const shares = charges.map((charge) => attribute(charge, batch, charges));
+    const shares = charges.map((charge) => attribute(charge, batch.expectedNet, charges));
 
     expect(Money.sum(shares).cents).toBe(batch.expectedNet.cents);
   });
@@ -61,8 +61,8 @@ describe('attribute (F02-T13, F02-T16)', () => {
   it('gives the larger payment the larger share', () => {
     const { charges, batch } = aDay();
 
-    const biggest = attribute(charges[0]!, batch, charges);
-    const smallest = attribute(charges[2]!, batch, charges);
+    const biggest = attribute(charges[0]!, batch.expectedNet, charges);
+    const smallest = attribute(charges[2]!, batch.expectedNet, charges);
 
     expect(biggest.compareTo(smallest)).toBe(1);
   });
@@ -71,7 +71,7 @@ describe('attribute (F02-T13, F02-T16)', () => {
     const { batch, charges } = aDay();
     const stranger = part('CHARGE', 1_000, 'stranger');
 
-    expect(attribute(stranger, batch, charges).isZero()).toBe(true);
+    expect(attribute(stranger, batch.expectedNet, charges).isZero()).toBe(true);
   });
 });
 
@@ -101,7 +101,7 @@ describe('traceMovement', () => {
       charge: charges[0]!,
       batch,
       charges,
-      match: { id: 'mat_x' as never } as never,
+      match: { id: 'mat_x', amounts: { observedNet: credit.amount } } as never,
       bankCredit: credit,
     });
 
