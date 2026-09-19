@@ -1,0 +1,166 @@
+import type { ConfidenceDto, HealthDto, ProposedEntryDto } from '@aa/contracts';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { EvidenceList } from './EvidenceList.js';
+import { MoneyFunnel, type FunnelStep } from './MoneyFunnel.js';
+import { ProposedEntryTable } from './ProposedEntryTable.js';
+import { Empty, Failed, Loading, SourceBanner } from './States.js';
+import { StatusChip } from './StatusChip.js';
+
+const money = (cents: number) => ({
+  cents,
+  currency: 'COP' as const,
+  formatted: `$${Math.abs(cents / 100).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+});
+
+describe('MoneyFunnel (F05-T02)', () => {
+  const steps: FunnelStep[] = [
+    { label: 'Ventas brutas', amount: money(31_754_900), kind: 'start' },
+    { label: 'Deducciones', amount: money(-1_411_948), kind: 'deduction' },
+    { label: 'Neto esperado', amount: money(30_342_952), kind: 'subtotal' },
+    { label: 'Acreditado en el banco', amount: money(30_342_952), kind: 'subtotal' },
+    { label: 'Diferencia', amount: money(0), kind: 'result' },
+  ];
+
+  it('adds up: gross less deductions equals the expected net', () => {
+    const [gross, deductions, expected] = steps;
+    expect(gross!.amount.cents + deductions!.amount.cents).toBe(expected!.amount.cents);
+  });
+
+  it('renders every step with its label and amount', () => {
+    render(<MoneyFunnel steps={steps} />);
+
+    for (const step of steps) {
+      expect(screen.getByText(step.label)).toBeDefined();
+    }
+  });
+});
+
+describe('EvidenceList (F05-T03)', () => {
+  const ambiguous: ConfidenceDto = {
+    score: 100,
+    band: 'AMBIGUOUS',
+    earned: 110,
+    attainable: 110,
+    components: [
+      { code: 'AMOUNT_EXACT', dimension: 'AMOUNT', passed: true, weight: 50 },
+      { code: 'COMPETING_CANDIDATE', dimension: 'UNIQUENESS', passed: false },
+    ],
+  };
+
+  it('shows a high score alongside the band that overrides it', () => {
+    render(<EvidenceList confidence={ambiguous} />);
+
+    // A perfect score that is still ambiguous: the band has to be visible, or
+    // a reader would take the 100 at face value.
+    expect(screen.getByText('100')).toBeDefined();
+    expect(screen.getByText('Ambiguo')).toBeDefined();
+  });
+
+  it('renders failed checks as failures, not as omissions', () => {
+    render(<EvidenceList confidence={ambiguous} />);
+
+    expect(screen.getByText(/otro depósito igualmente compatible/)).toBeDefined();
+  });
+
+  it('shows the raw score against what was attainable', () => {
+    render(<EvidenceList confidence={ambiguous} />);
+    expect(screen.getByText(/110 de 110 puntos posibles/)).toBeDefined();
+  });
+});
+
+describe('StatusChip', () => {
+  it('never styles an ambiguous match as a success', () => {
+    const { container } = render(<StatusChip status="AMBIGUOUS" />);
+    expect(container.querySelector('.chip--good')).toBeNull();
+    expect(container.querySelector('.chip--warn')).not.toBeNull();
+  });
+
+  it('translates ERP statuses too, since the vocabulary is shared', () => {
+    render(<StatusChip status="INCOMPLETE_ENTRY" />);
+    expect(screen.getByText('Asiento incompleto')).toBeDefined();
+  });
+});
+
+describe('ProposedEntryTable (F05-T05)', () => {
+  const entry: ProposedEntryDto = {
+    ref: 'mov:mov_a1b2c3d4e5f60718',
+    journalId: 48,
+    date: '2026-04-24',
+    reason: 'INCOMPLETE_ENTRY',
+    missingConcepts: ['FEE', 'TAX', 'WITHHOLDING'],
+    lines: [
+      { accountCode: '1110001', accountName: 'Wompi Tarjetas', debit: money(30_342_952), credit: money(0), label: 'Neto' },
+      { accountCode: '530505', accountName: 'Gastos Bancarios', debit: money(786_240), credit: money(0), label: 'Comisión' },
+      { accountCode: '240810', accountName: 'IVA Descontable', debit: money(149_385), credit: money(0), label: 'IVA' },
+      { accountCode: '236500', accountName: 'Retención', debit: money(476_323), credit: money(0), label: 'Retención' },
+      { accountCode: '420500', accountName: 'Otras Ventas', debit: money(0), credit: money(31_754_900), label: 'Venta' },
+    ],
+  };
+
+  it('shows the proposal as a balanced double entry', () => {
+    render(<ProposedEntryTable entry={entry} writeEnabled={false} />);
+    expect(screen.getByText('Cuadra')).toBeDefined();
+  });
+
+  it('disables the write action and explains why', () => {
+    render(<ProposedEntryTable entry={entry} writeEnabled={false} />);
+
+    expect(screen.getByRole('button', { name: /Crear asiento/ }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(/ODOO_WRITE_ENABLED=false/)).toBeDefined();
+  });
+
+  it('enables it when the backend says writing is allowed', () => {
+    render(<ProposedEntryTable entry={entry} writeEnabled />);
+    expect(screen.getByRole('button', { name: /Crear asiento/ }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('names the concepts the existing entry omits', () => {
+    render(<ProposedEntryTable entry={entry} writeEnabled={false} />);
+    expect(screen.getByText(/FEE, TAX, WITHHOLDING/)).toBeDefined();
+  });
+});
+
+describe('states (F05-T04)', () => {
+  it('says what it is loading, not just that it is loading', () => {
+    render(<Loading what="las liquidaciones" />);
+    expect(screen.getByText(/las liquidaciones/)).toBeDefined();
+  });
+
+  it('gives a failure an actionable hint', () => {
+    render(<Failed message="La API no respondió." hint="Ejecutá `make demo`." />);
+    expect(screen.getByText(/make demo/)).toBeDefined();
+  });
+
+  it('confirms an empty result rather than showing a blank page', () => {
+    render(<Empty title="Todo cerró">Las 40 liquidaciones conciliaron.</Empty>);
+    expect(screen.getByText('Todo cerró')).toBeDefined();
+  });
+
+  it('warns when a source did not answer, instead of passing stale data off as fresh', () => {
+    const health: HealthDto = {
+      status: 'degraded',
+      version: '0.1.0',
+      rulesetVersion: 'v1',
+      sources: [
+        { id: 'odoo:journal-48', mode: 'live', state: 'stale', asOf: '2026-09-18T10:00:00.000Z' },
+      ],
+    };
+
+    render(<SourceBanner health={health} />);
+    expect(screen.getByText(/no respondió/)).toBeDefined();
+    expect(screen.getByText(/2026-09-18/)).toBeDefined();
+  });
+
+  it('shows nothing at all when every source is healthy', () => {
+    const health: HealthDto = {
+      status: 'ok',
+      version: '0.1.0',
+      rulesetVersion: 'v1',
+      sources: [{ id: 'wompi:transactions', mode: 'live', state: 'ready' }],
+    };
+
+    const { container } = render(<SourceBanner health={health} />);
+    expect(container.firstChild).toBeNull();
+  });
+});
