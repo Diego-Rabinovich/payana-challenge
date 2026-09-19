@@ -15,6 +15,7 @@ export const EVIDENCE_CODES = [
   // —— Phase 2: channel to bank
   'AMOUNT_EXACT',
   'AMOUNT_WITHIN_ROUNDING',
+  'IMPLIED_FEE_TYPICAL',
   'IMPLIED_FEE_IN_BAND',
   'AMOUNT_MISMATCH',
   'DATE_T1_EXACT',
@@ -83,18 +84,6 @@ export interface Evidence {
    * numerator, so it moves the score neither way.
    */
   readonly applicable?: boolean;
-  /**
-   * True when this is the strongest form of its check the data allowed.
-   *
-   * Wompi publishes an amount and no breakdown, so AMOUNT_EXACT cannot be
-   * reached: you cannot be exact against a figure nobody stated. Leaving its
-   * weight in the denominator capped every settlement at PROBABLE for ever,
-   * which made the confirmed count a permanent zero and the review queue one
-   * that never empties. The ceiling for that dimension becomes this code's
-   * weight instead, and DEDUCTIONS_DERIVED travels alongside to say the
-   * breakdown was inferred rather than read.
-   */
-  readonly bestAvailable?: boolean;
   /** Contribution to the score, from the ruleset. Absent outside Phase 2. */
   readonly weight?: number;
   readonly expected?: string;

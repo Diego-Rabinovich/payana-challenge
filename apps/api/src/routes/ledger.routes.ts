@@ -41,23 +41,31 @@ export const ledgerRoutes =
             from: z.string().optional(),
             to: z.string().optional(),
             cursor: z.string().optional(),
-            limit: z.coerce.number().int().min(1).max(500).default(100),
+            offset: z.coerce.number().int().min(0).default(0),
+            limit: z.coerce.number().int().min(1).max(500).default(50),
           }),
           response: { 200: MovementPageDto },
         },
       },
       async (request) => {
-        const { from, to, cursor, limit } = request.query;
+        const { from, to, cursor, offset, limit } = request.query;
         const page = await ledger.listMovements({
           accountId: request.params.accountId,
           ...(from && to ? { window: { from, to } } : {}),
           ...(cursor ? { cursor } : {}),
+          offset,
           limit,
         });
 
         return {
           movements: page.items.map(toMovementDto),
-          page: { nextCursor: page.nextCursor, count: page.items.length },
+          page: {
+            nextCursor: page.nextCursor,
+            count: page.items.length,
+            total: page.total,
+            offset,
+            limit,
+          },
         };
       },
     );

@@ -17,6 +17,7 @@ export const EvidenceCodeDto = z.enum([
   // —— Phase 2: channel to bank
   'AMOUNT_EXACT',
   'AMOUNT_WITHIN_ROUNDING',
+  'IMPLIED_FEE_TYPICAL',
   'IMPLIED_FEE_IN_BAND',
   'AMOUNT_MISMATCH',
   'DATE_T1_EXACT',
@@ -82,6 +83,7 @@ export type EvidenceDimension =
 export const EVIDENCE_DIMENSIONS: Readonly<Record<EvidenceCode, EvidenceDimension>> = {
   AMOUNT_EXACT: 'AMOUNT',
   AMOUNT_WITHIN_ROUNDING: 'AMOUNT',
+  IMPLIED_FEE_TYPICAL: 'AMOUNT',
   IMPLIED_FEE_IN_BAND: 'AMOUNT',
   AMOUNT_MISMATCH: 'AMOUNT',
   SETTLEMENT_SINGLE_CREDIT: 'INTEGRITY',

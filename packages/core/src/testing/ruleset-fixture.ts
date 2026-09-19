@@ -8,11 +8,13 @@ export const TEST_RULESET_CONFIG: RuleSetConfig = {
     roundingCents: 10_000,
     identityCents: 1,
     impliedFeeRateBand: [0.02, 0.05],
+    typicalFeeRateBand: [0.0425, 0.0445],
   },
   weights: {
     AMOUNT_EXACT: 50,
     AMOUNT_WITHIN_ROUNDING: 25,
-    IMPLIED_FEE_IN_BAND: 20,
+    IMPLIED_FEE_TYPICAL: 40,
+    IMPLIED_FEE_IN_BAND: 25,
     DATE_T1_EXACT: 25,
     DATE_IN_WINDOW: 15,
     DESCRIPTOR_MATCH: 15,
@@ -21,7 +23,7 @@ export const TEST_RULESET_CONFIG: RuleSetConfig = {
     SETTLEMENT_SINGLE_CREDIT: 25,
   },
   exclusiveDimensions: {
-    AMOUNT: ['AMOUNT_EXACT', 'AMOUNT_WITHIN_ROUNDING', 'IMPLIED_FEE_IN_BAND'],
+    AMOUNT: ['AMOUNT_EXACT', 'IMPLIED_FEE_TYPICAL', 'AMOUNT_WITHIN_ROUNDING', 'IMPLIED_FEE_IN_BAND'],
     DATE: ['DATE_T1_EXACT', 'DATE_IN_WINDOW'],
   },
   bands: { CONFIRMED: 85, PROBABLE: 60, AMBIGUOUS: 40 },

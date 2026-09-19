@@ -50,29 +50,13 @@ export interface ScoringConfig {
  * silently shift what a band means. Exclusive dimensions contribute their best
  * option once; everything else contributes its own weight.
  */
-export function attainableScore(
-  config: ScoringConfig,
-  evidence: readonly Evidence[] = [],
-): number {
+export function attainableScore(config: ScoringConfig): number {
   const exclusive = new Set<EvidenceCode>(Object.values(config.exclusiveDimensions).flat());
 
-  // A dimension's ceiling is the best option the data allowed, not the best
-  // the table lists. See Evidence.bestAvailable.
-  const capped = new Map<string, number>();
-  for (const item of evidence) {
-    if (item.bestAvailable !== true) continue;
-    for (const [dimension, codes] of Object.entries(config.exclusiveDimensions)) {
-      if (codes.includes(item.code)) capped.set(dimension, config.weights[item.code] ?? 0);
-    }
-  }
-
-  const fromDimensions = Object.entries(config.exclusiveDimensions).reduce(
-    (total, [dimension, codes]) => {
-      const ceiling = capped.get(dimension) ?? Math.max(0, ...codes.map((c) => config.weights[c] ?? 0));
-      return total + ceiling;
-    },
-    0,
-  );
+  const fromDimensions = Object.values(config.exclusiveDimensions).reduce((total, codes) => {
+    const best = Math.max(0, ...codes.map((code) => config.weights[code] ?? 0));
+    return total + best;
+  }, 0);
 
   const fromIndependent = Object.entries(config.weights).reduce(
     (total, [code, weight]) => (exclusive.has(code as EvidenceCode) ? total : total + (weight ?? 0)),
@@ -110,7 +94,7 @@ export function scoreMatch(
   // Checks that could not be run come out of the denominator too, so the
   // score reads as "of what we could verify" rather than punishing us for
   // evidence the source never offered.
-  const attainable = attainableScore(config, evidence) - unattainable(evidence, config);
+  const attainable = attainableScore(config) - unattainable(evidence, config);
   const passed = evidence.filter((item) => item.passed);
 
   const exclusiveByCode = new Map<EvidenceCode, string>();

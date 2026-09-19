@@ -12,12 +12,18 @@
     "impliedFeeRateBand": [
       0.04,
       0.05
-    ]
+    ],
+    "typicalFeeRateBand": [
+      0.0425,
+      0.0445
+    ],
+    "typicalFeeRateNotes": "Measured, not chosen: across the 53 settlements of Jan-Apr 2026 the implied deduction rate has a median of 4.361% and a standard deviation of 0.090 points. This is that centre plus or minus one deviation, and it contains 41 of the 53. Outside it the gap is still plausible, which is what impliedFeeRateBand is for, but it is no longer typical and the score says so."
   },
   "weights": {
     "AMOUNT_EXACT": 50,
     "AMOUNT_WITHIN_ROUNDING": 25,
-    "IMPLIED_FEE_IN_BAND": 20,
+    "IMPLIED_FEE_TYPICAL": 40,
+    "IMPLIED_FEE_IN_BAND": 25,
     "DATE_T1_EXACT": 25,
     "DATE_IN_WINDOW": 15,
     "DESCRIPTOR_MATCH": 15,
@@ -28,6 +34,7 @@
   "exclusiveDimensions": {
     "AMOUNT": [
       "AMOUNT_EXACT",
+      "IMPLIED_FEE_TYPICAL",
       "AMOUNT_WITHIN_ROUNDING",
       "IMPLIED_FEE_IN_BAND"
     ],
@@ -90,7 +97,7 @@
     },
     "note": "Colombian VAT on services and withholding at source on card sales. Law, not gateway policy — which is why the deduction split needs only one unknown. See ADR-0013."
   },
-  "weightNotes": "SETTLEMENT_SINGLE_CREDIT is weighted like DATE_T1_EXACT because it answers the same kind of question: did the money arrive the way the agreement says it should. Adding it raised the attainable maximum from 110 to 135, so the amount weights were recalibrated against the bands rather than left alone: with 135 attainable, an amount that is only within rounding must stay under 25 for a settlement with every other check green to land in PROBABLE instead of CONFIRMED. A batch that arrived split forfeits 25 and lands at 81, which is PROBABLE.",
+  "weightNotes": "The amount check is graded because it carries most of the information. AMOUNT_EXACT (50) needs a breakdown the source stated. IMPLIED_FEE_TYPICAL (40) is the strongest a derived breakdown can reach: the gap sits on the rate this channel actually charges. IMPLIED_FEE_IN_BAND (25) is plausible but not typical. A derived settlement therefore tops out at 115 of 125 rather than at 125, which is the honest ceiling: nobody verified the commission, they only found it unsurprising.",
   "disqualifying": [
     "AMOUNT_MISMATCH",
     "DESCRIPTOR_FOREIGN",

@@ -132,20 +132,39 @@ export function amountEvidence(
     });
   }
 
+  // No breakdown was published, so the amount cannot be checked against a
+  // stated figure — only against what the channel's commission normally costs.
+  // That is real evidence, and it is graded, because "4,31%, right on the
+  // usual rate" and "4,69%, at the edge of plausible" are not the same claim.
+  // Treating both as a single pass was what put fifty-one of fifty-six
+  // settlements on exactly the same score.
   const reportedNothing = batch.deductions.length === 0;
   const rate = amounts.impliedDeductionRate ?? Number.NaN;
   const [low, high] = ruleSet.config.tolerances.impliedFeeRateBand;
+  const [usualLow, usualHigh] =
+    ruleSet.config.tolerances.typicalFeeRateBand ?? [low, high];
+
   if (reportedNothing && rate >= low && rate <= high) {
-    return {
-      ...evidence('IMPLIED_FEE_IN_BAND', 'AMOUNT', true, {
-        ...context,
-        detail: `tasa de deducción implícita ${(rate * 100).toFixed(2)}%`,
-      }),
-      // The source published no breakdown, so this is as exact as the amount
-      // check can get. Scoring it against AMOUNT_EXACT would measure us
-      // against evidence that does not exist.
-      bestAvailable: true,
+    const gap = amounts.gross.minus(amounts.observedNet ?? Money.zero());
+    const typical = rate >= usualLow && rate <= usualHigh;
+
+    // Not "expected 12.905.740 / observed 12.349.340", which reads as a
+    // mismatch when the difference is the whole point. The comparison that
+    // matters is the rate against the rate.
+    const rates = {
+      expected: `${percent(usualLow)}–${percent(usualHigh)} del bruto`,
+      observed: `${percent(rate)} · ${gap.toString()} sobre ${amounts.gross.toString()}`,
     };
+
+    return typical
+      ? evidence('IMPLIED_FEE_TYPICAL', 'AMOUNT', true, {
+          ...rates,
+          detail: 'la diferencia coincide con lo que este canal suele cobrar',
+        })
+      : evidence('IMPLIED_FEE_IN_BAND', 'AMOUNT', true, {
+          ...rates,
+          detail: 'plausible, pero fuera de la tasa habitual del canal',
+        });
   }
 
   return evidence('AMOUNT_MISMATCH', 'AMOUNT', false, {
@@ -226,6 +245,10 @@ export function identityEvidence(batch: SettlementBatch, ruleSet: RuleSet): Evid
   return holds
     ? evidence('IDENTITY_HOLDS', 'INTEGRITY', true, context)
     : evidence('IDENTITY_BROKEN', 'INTEGRITY', false, context);
+}
+
+function percent(value: number): string {
+  return `${(value * 100).toFixed(2).replace('.', ',')}%`;
 }
 
 function earliestDate(deposits: readonly Movement[]): Temporal.PlainDate {

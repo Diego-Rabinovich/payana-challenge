@@ -260,7 +260,7 @@ export class ReconcileFlow {
 function withDerivationEvidence(confidence: MatchResult['confidence'], derived: DerivedDeductions) {
   const note: Evidence = evidence('DEDUCTIONS_DERIVED', 'AMOUNT', derived.consistent, {
     expected: 'desglose informado por la fuente',
-    observed: `derivado de la diferencia · ${(derived.impliedRate * 100).toFixed(2)}% del bruto`,
+    observed: `derivado de la diferencia · ${(derived.impliedRate * 100).toFixed(2).replace('.', ',')}% del bruto`,
     detail: `comisión ${derived.fee.toString()} · IVA ${derived.tax.toString()} · retención ${derived.withholding.toString()}`,
   });
   return { ...confidence, components: [...confidence.components, note] };

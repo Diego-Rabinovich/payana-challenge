@@ -89,7 +89,10 @@ export const SourceRefDto = z.object({
 /** Cursor pagination: ledgers are long and grow, and offsets drift. */
 export const PageDto = z.object({
   nextCursor: z.string().nullable(),
-  count: z.number().int(),
+  count: z.number().int().describe('Rows in this page'),
+  total: z.number().int().describe('Rows in the whole collection'),
+  offset: z.number().int(),
+  limit: z.number().int(),
 });
 
 export type MoneyDto = z.infer<typeof MoneyDto>;

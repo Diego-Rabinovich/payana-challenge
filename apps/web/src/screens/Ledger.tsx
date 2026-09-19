@@ -1,8 +1,8 @@
 import type { AccountDto, MovementDto } from '@aa/contracts';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, show } from '../api/client.js';
-import { Empty, Resolved } from '../components/States.js';
+import { PeriodFilter, Pager, useFilter } from '../components/Filters.js';
+import { Empty, Failed, Loading, Resolved } from '../components/States.js';
 import { useResource } from '../lib/useResource.js';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -21,10 +21,13 @@ const TYPE_LABEL: Record<string, string> = {
 /**
  * The ledger itself — Phase 1's deliverable, made visible.
  *
- * A chronological run of one account's movements with a running balance, which
- * is what a ledger is. It matters that this screen exists before any
- * reconciliation screen: you cannot argue about whether two books agree until
- * you can show each of them.
+ * A chronological run of one account's movements, which is what a ledger is.
+ * It matters that this screen exists before any reconciliation screen: you
+ * cannot argue about whether two books agree until you can show each of them.
+ *
+ * It used to fetch five hundred rows at once and render every one. On the
+ * Wompi account that is most of a year of payments in a single scroll, with
+ * no total, no period and no way to find anything.
  */
 export function Ledger() {
   const accounts = useResource(() => api.accounts(), []);
@@ -37,97 +40,120 @@ export function Ledger() {
 }
 
 function LedgerFor({ accounts }: { accounts: readonly AccountDto[] }) {
-  const [selected, setSelected] = useState(accounts[0]?.id ?? '');
+  const [filter, update] = useFilter({ limit: 50 });
+  const [params, setParams] = useSearchParams();
+  const selected = params.get('cuenta') ?? accounts[0]?.id ?? '';
+
   const movements = useResource(
-    () => (selected ? api.movements(selected, { limit: 500 }) : Promise.resolve({ movements: [], page: { nextCursor: null, count: 0 } })),
-    [selected],
+    () =>
+      selected
+        ? api.movements(selected, {
+            ...(filter.from ? { from: filter.from } : {}),
+            ...(filter.to ? { to: filter.to } : {}),
+            limit: filter.limit,
+            offset: filter.offset,
+          })
+        : Promise.resolve({
+            movements: [],
+            page: { nextCursor: null, count: 0, total: 0, offset: 0, limit: filter.limit },
+          }),
+    [selected, filter.from, filter.to, filter.limit, filter.offset],
   );
 
-  return (
-    <section>
-      <header className="section__header">
-        <h2>Ledger</h2>
-        <p>Movimientos de una cuenta, en orden, con su saldo acumulado.</p>
-        <div className="nav">
-          {accounts.map((account) => (
-            <button
-              key={account.id}
-              type="button"
-              className={account.id === selected ? 'nav__link nav__link--active' : 'nav__link'}
-              onClick={() => setSelected(account.id)}
-            >
-              {account.name}
-            </button>
-          ))}
-        </div>
-      </header>
+  const selectAccount = (id: string) => {
+    const query = new URLSearchParams(params);
+    query.set('cuenta', id);
+    query.delete('offset');
+    setParams(query, { replace: true });
+  };
 
-      <Resolved resource={movements} what="los movimientos">
-        {({ movements: rows }) =>
-          rows.length === 0 ? (
-            <Empty title="Sin movimientos">
-              Esta cuenta no tiene movimientos ingestados para el período.
-            </Empty>
-          ) : (
-            <MovementTable rows={rows} />
-          )
-        }
-      </Resolved>
-    </section>
-  );
-}
-
-function MovementTable({ rows }: { rows: readonly MovementDto[] }) {
-  // The running balance is composed here because it is a property of the view,
-  // not of a movement: the same movement sits at a different balance depending
-  // on where the reader started reading.
-  let running = 0;
+  const account = accounts.find((candidate) => candidate.id === selected);
 
   return (
-    <div className="scroll">
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Tipo</th>
-            <th>Descripción</th>
-            <th>Contraparte</th>
-            <th className="right">Monto</th>
-            <th className="right">Saldo</th>
-            <th>Origen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((movement) => {
-            running += movement.amount.cents;
-            return (
-              <tr key={movement.id}>
-                <td>{movement.valueDate}</td>
-                <td>
-                  <span className="pill-type">{TYPE_LABEL[movement.type] ?? movement.type}</span>
-                </td>
-                <td>
-                  {movement.externalId ? (
-                    <Link to={`/movimientos/${movement.id}`}>{movement.description}</Link>
-                  ) : (
-                    movement.description
-                  )}
-                </td>
-                <td>{movement.counterparty ?? '—'}</td>
-                <td className="right">{show(movement.amount)}</td>
-                <td className="right">{formatTotal(running)}</td>
-                <td className="origin">{movement.source.locator ?? movement.source.sourceId}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="card">
+      <h2 className="card__title">Ledger</h2>
+      <p className="card__hint">
+        Los movimientos de una cuenta, en orden, cada uno trazable hasta el documento del que
+        salió. Es la salida de la fase 1 y la base de todo lo demás.
+      </p>
+
+      <div className="nav" style={{ marginTop: 0, marginBottom: 14 }}>
+        {accounts.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className={option.id === selected ? 'nav__link nav__link--active' : 'nav__link'}
+            onClick={() => selectAccount(option.id)}
+          >
+            {option.name}
+          </button>
+        ))}
+      </div>
+
+      <PeriodFilter filter={filter} onChange={update} />
+
+      {movements.state === 'loading' && <Loading what="los movimientos" />}
+      {movements.state === 'failed' && <Failed resource={movements} />}
+      {movements.state === 'ready' && movements.data.movements.length === 0 && (
+        <Empty title="Sin movimientos">
+          {account
+            ? `No hay movimientos de ${account.name} con estos filtros.`
+            : 'Elegí una cuenta.'}
+        </Empty>
+      )}
+
+      {movements.state === 'ready' && movements.data.movements.length > 0 && (
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Descripción</th>
+                  <th>Contraparte</th>
+                  <th className="num">Monto</th>
+                  <th>Origen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movements.data.movements.map((movement) => (
+                  <Row key={movement.id} movement={movement} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager page={movements.data.page} onChange={update} noun="movimientos" />
+        </>
+      )}
     </div>
   );
 }
 
-function formatTotal(cents: number): string {
-  const digits = Math.abs(cents).toString().padStart(3, '0');
-  const whole = digits.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${cents < 0 ? '-' : ''}$${whole},${digits.slice(-2)}`;
+function Row({ movement }: { movement: MovementDto }) {
+  const negative = movement.amount.cents < 0;
+
+  return (
+    <tr>
+      <td>{movement.valueDate}</td>
+      <td>
+        <span className="chip chip--neutral">{TYPE_LABEL[movement.type] ?? movement.type}</span>
+      </td>
+      <td>
+        {movement.type === 'CHARGE' ? (
+          <Link to={`/movimientos/${movement.id}`}>{movement.description}</Link>
+        ) : (
+          movement.description
+        )}
+        {movement.externalId && <div className="faint mono">{movement.externalId}</div>}
+      </td>
+      <td className="muted">{movement.counterparty ?? '—'}</td>
+      <td className={`num ${negative ? 'neg' : ''}`}>{show(movement.amount)}</td>
+      <td className="faint">
+        {/* Where this row came from, down to the locator inside the document. */}
+        {movement.source.sourceId}
+        <div className="mono">{movement.source.locator}</div>
+      </td>
+    </tr>
+  );
 }

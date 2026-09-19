@@ -127,6 +127,7 @@ export function stubDependencies(): ReadModel {
         // The extra field is deliberate: the serialiser must drop it.
         items: [{ ...testMovement(), internalOnly: 'must not reach the wire' } as Movement],
         nextCursor: null,
+        total: 1,
       }),
       findMovement: async (id) => (id === 'mov_a1b2c3d4e5f60718' ? testMovement() : undefined),
       lineageOf: async () => undefined,

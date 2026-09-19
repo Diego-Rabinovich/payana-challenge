@@ -30,6 +30,14 @@ export interface DateWindow {
 export interface Page<T> {
   readonly items: readonly T[];
   readonly nextCursor: string | null;
+  /**
+   * How many there are in total.
+   *
+   * A cursor alone tells a reader whether there is more, never how much more,
+   * and "movimientos 1–50" with no denominator is the kind of screen people
+   * scroll forever without knowing they have.
+   */
+  readonly total: number;
 }
 
 export interface LedgerQueries {
@@ -38,6 +46,7 @@ export interface LedgerQueries {
     accountId: string;
     window?: DateWindow;
     cursor?: string;
+    offset?: number;
     limit: number;
   }): Promise<Page<Movement>>;
   findMovement(movementId: string): Promise<Movement | undefined>;

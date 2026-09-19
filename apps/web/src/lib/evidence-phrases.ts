@@ -16,6 +16,8 @@ const PHRASES: Readonly<Record<EvidenceCode, Phrase>> = {
   AMOUNT_EXACT: () => 'El monto acreditado coincide exactamente con el neto esperado.',
   AMOUNT_WITHIN_ROUNDING: (e) =>
     `El monto difiere en ${e.detail ?? 'una cifra menor'}, dentro de la tolerancia de redondeo.`,
+  IMPLIED_FEE_TYPICAL: (e) =>
+    `La diferencia es la comisión, y da ${e.observed?.split(' ·')[0] ?? ''}, la tasa habitual de este canal.`,
   IMPLIED_FEE_IN_BAND: (e) =>
     `Las deducciones no vienen detalladas; ${e.detail ?? 'la diferencia implica una tasa dentro del rango esperado'}.`,
   AMOUNT_MISMATCH: (e) => `El monto acreditado difiere del neto esperado en ${e.detail ?? 'una cifra significativa'}.`,

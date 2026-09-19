@@ -118,7 +118,7 @@ export function Pager({
   noun = 'resultados',
 }: {
   page: OffsetPageDto;
-  onChange: (patch: { offset: number }) => void;
+  onChange: (patch: { offset: number; limit?: number }) => void;
   noun?: string;
 }) {
   const first = page.total === 0 ? 0 : page.offset + 1;
@@ -126,21 +126,24 @@ export function Pager({
   const canPrevious = page.offset > 0;
   const canNext = last < page.total;
 
-  if (page.total <= page.limit && !canPrevious) {
-    return (
-      <div className="pager">
-        <span>
-          {page.total} {noun}
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div className="pager">
       <span>
-        {first}–{last} de {page.total} {noun}
+        {page.total === 0 ? `0 ${noun}` : `${first}–${last} de ${page.total} ${noun}`}
       </span>
+      <label className="muted">
+        {' · '}
+        <select
+          value={page.limit}
+          onChange={(event) => onChange({ offset: 0, limit: Number(event.target.value) })}
+        >
+          {[25, 50, 100, 200].map((size) => (
+            <option key={size} value={size}>
+              {size} por página
+            </option>
+          ))}
+        </select>
+      </label>
       <span className="pager__spacer" />
       <button
         type="button"

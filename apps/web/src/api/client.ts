@@ -78,7 +78,7 @@ export const api = {
   accounts: () => get<{ accounts: AccountDto[] }>('/accounts'),
 
   movements: (accountId: string, params: Window = {}) =>
-    get<{ movements: MovementDto[]; page: { nextCursor: string | null; count: number } }>(
+    get<{ movements: MovementDto[]; page: OffsetPageDto & { nextCursor: string | null } }>(
       `/accounts/${encodeURIComponent(accountId)}/movements${query({ ...params })}`,
     ),
 

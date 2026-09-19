@@ -30,6 +30,12 @@ export interface RuleSetConfig extends ScoringConfig {
     readonly identityCents: number;
     /** Plausible total deduction rate when the source did not report one. */
     readonly impliedFeeRateBand: readonly [number, number];
+    /**
+     * The narrower rate the channel actually charges. Inside it the gap is
+     * strong evidence; merely inside `impliedFeeRateBand` it is weak evidence.
+     * Absent means the two are the same and the check is not graded.
+     */
+    readonly typicalFeeRateBand?: readonly [number, number];
   };
   readonly subsetSum: {
     readonly maxSubsetSize: number;

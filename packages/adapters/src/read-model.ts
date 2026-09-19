@@ -68,7 +68,7 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     ledger: {
       listAccounts: async () => accountList,
 
-      listMovements: async ({ accountId, window, cursor, limit }) => {
+      listMovements: async ({ accountId, window, cursor, offset, limit }) => {
         const all = await repositories.movements.findByAccount(
           accountId as Account['id'],
           window
@@ -78,11 +78,18 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
               }
             : undefined,
         );
-        // Cursor is the last id seen: stable under inserts in a way an offset
-        // is not, and the ordering is part of the repository contract.
-        const start = cursor ? all.findIndex((movement) => movement.id === cursor) + 1 : 0;
+        // A cursor is the last id seen, which is stable under inserts where an
+        // offset is not; an offset is what lets a screen say "51-75 of 312".
+        // Both are accepted, the cursor wins when present.
+        const start = cursor
+          ? all.findIndex((movement) => movement.id === cursor) + 1
+          : (offset ?? 0);
         const page = all.slice(start, start + limit);
-        return { items: page, nextCursor: start + limit < all.length ? (page.at(-1)?.id ?? null) : null };
+        return {
+          items: page,
+          nextCursor: start + limit < all.length ? (page.at(-1)?.id ?? null) : null,
+          total: all.length,
+        };
       },
 
       findMovement: (movementId) => repositories.movements.findById(asMovementId(movementId)),
