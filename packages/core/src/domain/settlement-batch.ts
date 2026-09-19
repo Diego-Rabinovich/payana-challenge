@@ -3,9 +3,10 @@ import { sha256 } from './identity.js';
 import { type AccountId, type BatchId, type MovementId, batchId } from './ids.js';
 import { Money } from './money.js';
 import type { Movement, MovementType } from './movement.js';
+import { DAILY_T1, type SettlementPolicy, closingDateFor } from './settlement-policy.js';
 
 /**
- * A settlement batch: the charges a gateway collected on one cutoff date,
+ * A settlement batch: the charges a gateway collected in one cutoff period,
  * what it netted out, and what it therefore owes the bank.
  *
  * This is the join node of the whole reconciliation. Without it, matching N
@@ -52,19 +53,25 @@ export function deriveBatchId(accountId: AccountId, date: Temporal.PlainDate): B
 }
 
 /**
- * Groups a gateway ledger into daily batches.
+ * Groups a gateway ledger into batches, one per cutoff period.
  *
- * The cutoff is assumed to be the calendar day in the business timezone
- * (Q2.1). If it turns out to be hourly, late payments belong to the next
- * batch — detectable in the data as a day that misses by exactly the amount
- * of its last transactions, and fixable by passing a different `batchDateOf`.
+ * The period comes from the channel's policy, not from this function: daily
+ * for Wompi, which is what the brief describes, but a channel that cuts
+ * weekly groups a week of charges into one batch with no change here. The
+ * cutoff within a day is assumed to be midnight in the business timezone
+ * (Q2.1); were it hourly, late payments would belong to the next batch —
+ * detectable as a day that misses by exactly its last transactions, and
+ * fixable by passing a different `batchDateOf`.
  */
 export function buildSettlementBatches(input: {
   readonly accountId: AccountId;
   readonly movements: readonly Movement[];
+  readonly policy?: SettlementPolicy;
   readonly batchDateOf?: (movement: Movement) => Temporal.PlainDate;
 }): SettlementBatch[] {
-  const batchDateOf = input.batchDateOf ?? ((movement: Movement) => movement.valueDate);
+  const policy = input.policy ?? DAILY_T1;
+  const batchDateOf =
+    input.batchDateOf ?? ((movement: Movement) => closingDateFor(movement.valueDate, policy));
   const byDate = new Map<string, Movement[]>();
 
   for (const movement of input.movements) {
