@@ -59,7 +59,7 @@ export class IngestSource {
       await this.rawRecords.upsert({ ...raw, runId: input.runId });
 
       try {
-        const result = this.parsers.resolve(raw).parse(raw);
+        const result = await this.parsers.resolve(raw).parse(raw);
         notes.push(...result.notes);
         for (const record of result.records) {
           pending.push({ ...record, id: deriveMovementId(record), runId: input.runId });

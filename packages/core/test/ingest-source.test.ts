@@ -55,7 +55,7 @@ describe('IngestSource', () => {
     const raw = aRawRecord();
     const useCase = new IngestSource(
       connectorFor([raw]),
-      registryFor({ id: 'noop', canParse: () => true, parse: () => ({ records: [], notes: [] }) }),
+      registryFor({ id: 'noop', canParse: () => true, parse: async () => ({ records: [], notes: [] }) }),
       rawRecords,
       movements,
     );
@@ -71,7 +71,7 @@ describe('IngestSource', () => {
     const parser: RecordParser = {
       id: 'wompi',
       canParse: () => true,
-      parse: () => ({
+      parse: async () => ({
         records: [
           aCanonicalRecord({ type: 'CHARGE', amount: Money.ofCents(31_754_900), source: locator('charge') }),
           aCanonicalRecord({ type: 'FEE', amount: Money.ofCents(-786_240), source: locator('fee') }),
@@ -96,7 +96,7 @@ describe('IngestSource', () => {
     const parser: RecordParser = {
       id: 'wompi',
       canParse: () => true,
-      parse: () => ({ records: [aCanonicalRecord()], notes: [] }),
+      parse: async () => ({ records: [aCanonicalRecord()], notes: [] }),
     };
     const useCase = new IngestSource(connectorFor([aRawRecord()]), registryFor(parser), rawRecords, movements);
 
@@ -113,7 +113,7 @@ describe('IngestSource', () => {
     const parser: RecordParser = {
       id: 'bancolombia',
       canParse: () => true,
-      parse: () => ({
+      parse: async () => ({
         records: [],
         notes: [
           evidence('BALANCE_CHAIN_OK', 'INGESTION', true),
@@ -138,7 +138,7 @@ describe('IngestSource', () => {
     const parser: RecordParser = {
       id: 'statement',
       canParse: () => true,
-      parse: (raw) => {
+      parse: async (raw) => {
         if (raw.origin === 'file:broken.pdf') {
           throw new ParseIntegrityError('Balance chain breaks at row 14', {
             sourceId: SOURCE,

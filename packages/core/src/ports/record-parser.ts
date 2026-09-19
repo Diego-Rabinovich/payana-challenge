@@ -19,12 +19,15 @@ export interface ParseResult {
  *  2. populate SourceRef.locator precisely enough to find the original row;
  *  3. validate an integrity invariant and throw ParseIntegrityError if it
  *     breaks — partial results are not returned. See ADR-0009.
+ *
+ * `parse` is async because reading a PDF is: the signature tells the truth
+ * rather than forcing every adapter to pretend its work is synchronous.
  */
 export interface RecordParser {
   readonly id: string;
   /** Sniffer: does this parser recognise the document? Enables layout A/B. */
   canParse(raw: RawRecord): boolean;
-  parse(raw: RawRecord): ParseResult;
+  parse(raw: RawRecord): Promise<ParseResult>;
 }
 
 /**
