@@ -129,6 +129,8 @@ export function stubDependencies(): ReadModel {
         nextCursor: null,
         total: 1,
       }),
+      findMovements: async (ids) =>
+        ids.includes('mov_a1b2c3d4e5f60718') ? [testMovement()] : [],
       findMovement: async (id) => (id === 'mov_a1b2c3d4e5f60718' ? testMovement() : undefined),
       lineageOf: async () => undefined,
     },

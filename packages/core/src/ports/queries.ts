@@ -50,6 +50,8 @@ export interface LedgerQueries {
     limit: number;
   }): Promise<Page<Movement>>;
   findMovement(movementId: string): Promise<Movement | undefined>;
+  /** Several at once, for a screen that has a list of ids and needs the rows. */
+  findMovements(ids: readonly string[]): Promise<readonly Movement[]>;
   lineageOf(movementId: string): Promise<Lineage | undefined>;
 }
 

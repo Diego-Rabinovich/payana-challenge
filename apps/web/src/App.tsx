@@ -4,6 +4,7 @@ import { SourceBanner } from './components/States.js';
 import { useResource } from './lib/useResource.js';
 import { Dashboard } from './screens/Dashboard.js';
 import { ErpReconciliation } from './screens/ErpReconciliation.js';
+import { Glossary } from './screens/Glossary.js';
 import { Ledger } from './screens/Ledger.js';
 import { Lineage } from './screens/Lineage.js';
 import { NewRun } from './screens/NewRun.js';
@@ -26,6 +27,7 @@ const SECTIONS = [
   { to: '/erp/bancolombia', label: 'ERP · Bancolombia' },
   { to: '/ledger', label: 'Ledger' },
   { to: '/corrida', label: 'Nueva corrida' },
+  { to: '/glosario', label: 'Glosario' },
 ];
 
 export function App() {
@@ -59,6 +61,7 @@ export function App() {
           <Route path="/sin-atribuir" element={<Unattributed />} />
           <Route path="/corrida" element={<NewRun />} />
           <Route path="/ledger" element={<Ledger />} />
+          <Route path="/glosario" element={<Glossary />} />
           <Route path="/movimientos/:movementId" element={<Lineage />} />
           <Route path="/erp/:journalKey" element={<ErpReconciliation />} />
           {/* Old links keep working rather than dead-ending on the panel. */}

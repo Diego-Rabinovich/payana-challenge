@@ -94,6 +94,13 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
 
       findMovement: (movementId) => repositories.movements.findById(asMovementId(movementId)),
 
+      findMovements: async (ids) => {
+        const found = await Promise.all(
+          ids.map((id) => repositories.movements.findById(asMovementId(id))),
+        );
+        return found.filter((movement): movement is Movement => movement !== undefined);
+      },
+
       lineageOf: async (movementId) => buildLineage(movementId),
     },
 

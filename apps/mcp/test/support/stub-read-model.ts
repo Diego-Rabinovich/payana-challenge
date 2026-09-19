@@ -184,6 +184,8 @@ export function stubReadModel(): ReadModel {
     ledger: {
       listAccounts: async () => [],
       listMovements: async () => ({ items: [movement], nextCursor: null, total: 1 }),
+      findMovements: async (ids) =>
+        ids.includes(movement.id) ? [movement] : [],
       findMovement: async (id) => (id === movement.id ? movement : undefined),
       lineageOf: async (id) =>
         id === movement.id

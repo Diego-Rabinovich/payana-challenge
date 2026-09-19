@@ -1,5 +1,6 @@
 import {
   ErpReconciliationDto,
+  MovementDto,
   OffsetPageDto,
   ReconciliationDto,
   ReconciliationSummaryDto,
@@ -12,12 +13,13 @@ import { z } from 'zod';
 import { NotFoundError } from '../plugins/error-handler.js';
 import {
   toErpReconciliationDto,
+  toMovementDto,
   toReconciliationDto,
   toReconciliationSummaryDto,
   toSettlementBatchDto,
   toUnattributedCreditDto,
 } from '@aa/adapters';
-import type { AccountMap, ErpQueries, FlowQueries, RuleSet } from '@aa/core';
+import type { AccountMap, ErpQueries, FlowQueries, LedgerQueries, RuleSet } from '@aa/core';
 
 const StatusFilter = z
   .enum(['confirmed', 'probable', 'ambiguous', 'unmatched'])
@@ -55,6 +57,7 @@ export const reconciliationRoutes =
   (
     flow: FlowQueries,
     erp: ErpQueries,
+    ledger: LedgerQueries,
     accountMap: AccountMap,
     ruleSet: RuleSet,
   ): FastifyPluginAsync =>
@@ -167,6 +170,62 @@ export const reconciliationRoutes =
         const match = await flow.findReconciliation(request.params.matchId);
         if (!match) throw new NotFoundError(`Reconciliation ${request.params.matchId}`);
         return toReconciliationDto(match);
+      },
+    );
+
+    app.get(
+      '/reconciliations/:matchId/movements',
+      {
+        schema: {
+          tags: ['reconciliation'],
+          summary: 'The payments that make up a settlement and the credits that paid it',
+          description:
+            'What a settlement is, spelled out: the gateway charges due on one day, and the bank ' +
+            'rows they arrived in. Enough to check the arithmetic by hand against a statement.',
+          params: z.object({ matchId: z.string() }),
+          response: {
+            200: z.object({
+              charges: z.array(MovementDto),
+              credits: z.array(MovementDto),
+              rejected: z.array(
+                z.object({
+                  movement: MovementDto,
+                  score: z.number(),
+                  rejectedBecause: z.string(),
+                }),
+              ),
+            }),
+          },
+        },
+      },
+      async (request) => {
+        const match = await flow.findReconciliation(request.params.matchId);
+        if (!match) throw new NotFoundError(`Reconciliation ${request.params.matchId}`);
+
+        const [charges, credits] = await Promise.all([
+          ledger.findMovements(match.left.chargeIds),
+          ledger.findMovements(match.right?.movementIds ?? []),
+        ]);
+
+        // The candidates it set aside, as rows rather than as bare ids: a
+        // reader deciding whether the matcher was right needs the date, the
+        // amount and the descriptor, which an id does not carry.
+        const rejected = await Promise.all(
+          match.alternatives.map(async (alternative) => {
+            const found = await ledger.findMovements(alternative.movementIds);
+            return found.map((movement) => ({
+              movement: toMovementDto(movement),
+              score: alternative.score,
+              rejectedBecause: alternative.rejectedBecause,
+            }));
+          }),
+        );
+
+        return {
+          charges: charges.map(toMovementDto),
+          credits: credits.map(toMovementDto),
+          rejected: rejected.flat(),
+        };
       },
     );
 

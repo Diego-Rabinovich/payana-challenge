@@ -91,13 +91,15 @@ function EvidenceRow({ evidence }: { evidence: EvidenceDto }) {
         )}
       </div>
       <div className="evidence__points">
-        {notApplicable
-          ? 'no aplica'
-          : evidence.passed && evidence.weight
-            ? `+${evidence.weight}`
-            : evidence.passed
-              ? '✓'
-              : '0'}
+        {notApplicable ? (
+          <span className="muted">no aplica</span>
+        ) : evidence.weight ? (
+          <strong>+{evidence.weight}</strong>
+        ) : evidence.passed ? (
+          <span className="muted">sin puntos</span>
+        ) : (
+          <span className="muted">0</span>
+        )}
         <code className="evidence__code">{evidence.code}</code>
       </div>
     </li>

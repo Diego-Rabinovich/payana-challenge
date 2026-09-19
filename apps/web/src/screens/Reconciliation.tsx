@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, show } from '../api/client.js';
 import { ConfidenceMeter, EvidenceList, StatusChip } from '../components/Confidence.js';
 import { PeriodFilter, StatusFilter, Pager, useFilter } from '../components/Filters.js';
+import { SettlementDetail } from '../components/SettlementDetail.js';
 import { Empty, Failed, Loading } from '../components/States.js';
 import { useResource } from '../lib/useResource.js';
 
@@ -170,35 +171,7 @@ function Row({
 
               <EvidenceList confidence={match.confidence} />
 
-              {match.alternatives.length > 0 && (
-                <div>
-                  <div className="section-title" style={{ marginTop: 0 }}>
-                    Candidatos descartados
-                  </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Crédito</th>
-                          <th className="num">Puntaje</th>
-                          <th>Motivo del descarte</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {match.alternatives.map((alternative) => (
-                          <tr key={alternative.movementIds.join('+')}>
-                            <td className="mono">{alternative.movementIds.join(' + ')}</td>
-                            <td className="num">{alternative.score}</td>
-                            <td>
-                              <code>{alternative.rejectedBecause}</code>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+              <SettlementDetail match={match} />
             </div>
           </td>
         </tr>

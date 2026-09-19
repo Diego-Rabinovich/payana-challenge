@@ -2,8 +2,9 @@ import {
   CreateRunDto,
   EVIDENCE_CODES,
   EVIDENCE_DIMENSIONS,
-  EvidenceCodeInfoDto,
+  type EvidenceCode,
   HealthDto,
+  RubricDto,
   RunDto,
   StatementFileDto,
   UploadStatementDto,
@@ -13,6 +14,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { NotFoundError, RejectedError } from '../plugins/error-handler.js';
 import type { ReadModel } from '@aa/core';
+import { attainableScore } from '@aa/core';
 
 export const runRoutes =
   (deps: ReadModel): FastifyPluginAsync =>
@@ -159,19 +161,39 @@ export const runRoutes =
       {
         schema: {
           tags: ['meta'],
-          summary: 'The closed vocabulary every conclusion is explained with',
-          response: { 200: z.object({ codes: z.array(EvidenceCodeInfoDto) }) },
+          summary: 'The closed vocabulary and the weight of each code. The rubric itself',
+          response: { 200: RubricDto },
         },
       },
-      // Served straight from the contract, which a test in this app pins to
-      // the domain's own list — so what is published is what is emitted.
-      async () => ({
-        codes: EVIDENCE_CODES.map((code) => ({
-          code,
-          dimension: EVIDENCE_DIMENSIONS[code],
-          meaning: `docs/EVIDENCE-CODES.md#${code.toLowerCase()}`,
-        })),
-      }),
+      // Served from the contract and the live ruleset rather than from a page
+      // someone maintains by hand: a weight that changes in config changes
+      // here on the next request, so the glossary cannot go stale.
+      async () => {
+        const { weights, exclusiveDimensions, bands, ambiguityDelta, disqualifying } =
+          deps.ruleSet.config;
+
+        const groupOf = (code: string) =>
+          Object.values(exclusiveDimensions).find((codes) =>
+            (codes as readonly string[]).includes(code),
+          ) ?? [];
+
+        return {
+          rulesetVersion: deps.rulesetVersion,
+          attainable: attainableScore(deps.ruleSet.scoring),
+          bands,
+          ambiguityDelta,
+          codes: EVIDENCE_CODES.map((code) => ({
+            code,
+            dimension: EVIDENCE_DIMENSIONS[code],
+            ...(weights[code] !== undefined ? { weight: weights[code] } : {}),
+            disqualifying: (disqualifying ?? []).includes(code),
+            exclusiveWith: (groupOf(code) as readonly EvidenceCode[]).filter(
+              (other) => other !== code,
+            ),
+            meaning: code,
+          })),
+        };
+      },
     );
   };
 

@@ -117,6 +117,18 @@ export function scoreMatch(
   }
   for (const weight of bestPerDimension.values()) earned += weight;
 
+  // What each check actually contributed, written back onto it.
+  //
+  // Without this every passed check rendered as an identical green tick, so
+  // two settlements scoring 92 and 80 looked the same on screen and the
+  // difference — 40 points for a typical commission against 25 for a merely
+  // plausible one, 25 for T+1 against 15 for T+2 — was invisible. A score
+  // whose arithmetic cannot be followed is just an assertion.
+  const scored = evidence.map((item) => ({
+    ...item,
+    weight: item.passed ? (config.weights[item.code] ?? 0) : 0,
+  }));
+
   const score = attainable > 0 ? Math.round((earned / attainable) * 100) : 0;
   const blocked = disqualifiedBy(evidence, config);
 
@@ -125,7 +137,7 @@ export function scoreMatch(
     band: blocked ? 'UNMATCHED' : bandFor(score, config, options),
     earned,
     attainable,
-    components: evidence,
+    components: scored,
     ...(blocked ? { disqualifiedBy: blocked } : {}),
   };
 }

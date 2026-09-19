@@ -8,6 +8,7 @@ import type {
   OffsetPageDto,
   ReconciliationDto,
   ReconciliationSummaryDto,
+  RubricDto,
   RunDto,
   SettlementBatchDto,
   StatementFileDto,
@@ -72,6 +73,9 @@ export interface Window {
 export const api = {
   health: () => get<HealthDto>('/health'),
 
+  /** The rubric, so the glossary never transcribes what the engine scores with. */
+  rubric: () => get<RubricDto>('/evidence-codes'),
+
   summary: (runId?: string) =>
     get<ReconciliationSummaryDto>(`/reconciliation-summary${query({ runId })}`),
 
@@ -99,6 +103,14 @@ export const api = {
   },
 
   reconciliation: (matchId: string) => get<ReconciliationDto>(`/reconciliations/${matchId}`),
+
+  /** The payments behind a settlement and the bank rows that paid it. */
+  settlementMovements: (matchId: string) =>
+    get<{
+      charges: MovementDto[];
+      credits: MovementDto[];
+      rejected: { movement: MovementDto; score: number; rejectedBecause: string }[];
+    }>(`/reconciliations/${matchId}/movements`),
 
   settlementBatches: async (params: Window & { runId?: string } = {}) => {
     const body = await get<{ batches: SettlementBatchDto[]; page: OffsetPageDto }>(

@@ -58,8 +58,26 @@ export const ProblemDto = z.object({
 export const EvidenceCodeInfoDto = z.object({
   code: EvidenceCodeDto,
   dimension: EvidenceDimensionDto,
+  /** What it adds to the score when it passes. Absent means it scores nothing. */
   weight: z.number().optional(),
+  /** True when failing it discards the candidate outright, whatever the score. */
+  disqualifying: z.boolean(),
+  /**
+   * Codes that answer the same question, of which only the best can count.
+   * Naming the group is what makes a weight table readable: 40 against 25
+   * means nothing until you know they are alternatives.
+   */
+  exclusiveWith: z.array(EvidenceCodeDto),
   meaning: z.string(),
+});
+
+/** The whole rubric, so the glossary is served rather than transcribed. */
+export const RubricDto = z.object({
+  rulesetVersion: z.string(),
+  attainable: z.number().describe('The maximum any settlement could score'),
+  bands: z.object({ CONFIRMED: z.number(), PROBABLE: z.number(), AMBIGUOUS: z.number() }),
+  ambiguityDelta: z.number(),
+  codes: z.array(EvidenceCodeInfoDto),
 });
 
 export const HealthDto = z.object({
@@ -102,3 +120,5 @@ export const UploadStatementDto = z.object({
 
 export type StatementFileDto = z.infer<typeof StatementFileDto>;
 export type UploadStatementDto = z.infer<typeof UploadStatementDto>;
+export type RubricDto = z.infer<typeof RubricDto>;
+export type EvidenceCodeInfoDto = z.infer<typeof EvidenceCodeInfoDto>;
