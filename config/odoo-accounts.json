@@ -1,47 +1,63 @@
 {
   "description": "Canonical movement type to Odoo account. Taken verbatim from the brief. A type absent here emits NO_ACCOUNT_MAPPING and is reported rather than silently dropped.",
-
   "journals": {
     "wompi": {
       "id": 48,
       "name": "Wompi Tarjetas",
       "type": "bank",
-      "bankAccount": "1110001",
+      "mainAccount": "1110001",
       "suspenseAccount": "1010001",
       "bankAccountNumber": "19300002179",
-      "entryPrefix": "WMP"
+      "entryPrefix": "WMP",
+      "accountName": "Wompi Tarjetas",
+      "code": "WMP"
     },
     "bancolombia": {
       "id": 49,
       "name": "Bancolombia",
       "type": "bank",
       "mainAccount": "111001",
-      "bankAccountNumber": "00000000000"
+      "bankAccountNumber": "00000000000",
+      "suspenseAccount": "111002",
+      "accountName": "Bank",
+      "code": "BNK8"
     }
   },
-
   "accounts": {
-    "CHARGE": { "code": "420500", "name": "Otras Ventas", "side": "credit" },
-    "FEE": { "code": "530505", "name": "Gastos Bancarios", "side": "debit" },
-    "TAX": { "code": "240810", "name": "IVA Descontable", "side": "debit" },
-    "WITHHOLDING": { "code": "236500", "name": "Retención En La Fuente", "side": "debit" },
-    "PAYOUT": { "code": "111001", "name": "Banco", "side": "debit" },
-    "DEPOSIT": { "code": "111001", "name": "Banco", "side": "debit" }
+    "CHARGE": {
+      "code": "420500",
+      "name": "Other sales"
+    },
+    "FEE": {
+      "code": "530505",
+      "name": "Gastos Bancarios"
+    },
+    "TAX": {
+      "code": "240810",
+      "name": "IVA Descontable"
+    },
+    "WITHHOLDING": {
+      "code": "236500",
+      "name": "Retención En La Fuente"
+    },
+    "TRANSFER_OUT": {
+      "code": "111001",
+      "name": "Banco"
+    },
+    "TRANSFER_IN": {
+      "code": "111001",
+      "name": "Banco"
+    }
   },
-
   "unmapped": [
     "INTEREST",
-    "BANK_FEE",
-    "BANK_TAX",
-    "TRANSFER_IN",
-    "TRANSFER_OUT",
     "REFUND",
     "CHARGEBACK",
     "OTHER"
   ],
-
   "notes": [
-    "The brief lists 'Banco → 111001' under the Wompi section, while journal 48 declares bank account 1110001 (Wompi Tarjetas). Which one the 40 existing entries actually use is determined by reading them, not by guessing. See ADR-0006.",
+    "Verified read-only against payana-prod on 2026-09-19. Journal 48 posts to 1110001 Wompi Tarjetas (not 111001); 111001 Bank belongs to journal 49. The brief's 'Banco -> 111001' refers to the Bancolombia side.",
+    "Account names here match Odoo's own labels, which are in English, so a reported code and its name agree with what someone sees in the ERP.",
     "Bank-originated concepts (interest, account maintenance fee, its VAT, statement withholding) have no account in the given chart. They enter the Bancolombia ledger because otherwise the balance would not close, and are flagged NO_ACCOUNT_MAPPING."
   ]
 }
