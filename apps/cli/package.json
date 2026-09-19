@@ -8,11 +8,13 @@
   },
   "scripts": {
     "dev": "tsx src/main.ts",
-    "demo": "tsx src/main.ts demo"
+    "demo": "tsx src/main.ts demo",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aa/core": "workspace:*",
-    "@aa/adapters": "workspace:*"
+    "@aa/adapters": "workspace:*",
+    "@aa/contracts": "workspace:^",
+    "@aa/core": "workspace:*"
   },
   "_comment": "Argument parsing via node:util parseArgs (built in). Zero CLI dependencies."
 }
