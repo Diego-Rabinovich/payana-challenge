@@ -1,0 +1,20 @@
+# pnpm links workspace packages into node_modules as symlinks, which the build
+# context cannot follow — the build fails with "invalid file request" before it
+# starts. Excluding node_modules fixes that and is what we want anyway: the
+# image installs its own dependencies for the right platform.
+node_modules
+**/node_modules
+
+# Build output, rebuilt inside the image.
+dist
+**/dist
+
+# Secrets and generated artifacts never belong in an image layer.
+.env
+.env.*
+!.env.example
+data/out
+.git
+.github
+docs
+*.md

@@ -1,6 +1,6 @@
-.PHONY: up down demo ingest reconcile report test lint check logs clean
+.PHONY: up down logs demo run report test lint typecheck check clean
 
-## Bring up db + api + web
+## Bring up db + api + web. Web on :8090, API on :3100, Postgres on :5433
 up:
 	docker compose -f infra/docker-compose.yml up --build -d
 
@@ -10,19 +10,20 @@ down:
 logs:
 	docker compose -f infra/docker-compose.yml logs -f api
 
-## Full run over fixtures. No credentials, no network.
-## Writes data/out/report.md, report.json and movements.ndjson
+## Start only the database, for running the CLI or tests against it
+db:
+	docker compose -f infra/docker-compose.yml up -d db
+
+## Full pipeline over the configured period, then write the artifacts.
+## Runs in the same image as the API, so it needs no toolchain on the host.
 demo:
-	SOURCE_MODE=fixtures pnpm --filter @aa/cli demo
+	docker compose -f infra/docker-compose.yml --profile tools run --rm cli demo --from=$(or $(FROM),2026-01-01) --to=$(or $(TO),2026-04-30)
 
-ingest:
-	pnpm --filter @aa/cli dev ingest --source=$(SOURCE) --from=$(FROM) --to=$(TO)
-
-reconcile:
-	pnpm --filter @aa/cli dev reconcile --from=$(FROM) --to=$(TO)
+run:
+	docker compose -f infra/docker-compose.yml --profile tools run --rm cli run --from=$(FROM) --to=$(TO)
 
 report:
-	pnpm --filter @aa/cli dev report --run=$(RUN) --format=all
+	docker compose -f infra/docker-compose.yml --profile tools run --rm cli report
 
 test:
 	pnpm -r test
@@ -30,9 +31,11 @@ test:
 lint:
 	pnpm lint
 
-## Must pass before a phase is called done
-check: lint test
-	pnpm typecheck
+typecheck:
+	pnpm -r typecheck
+
+## What has to pass before a phase is called done
+check: lint typecheck test
 
 clean:
 	rm -rf node_modules **/node_modules **/dist data/out/*

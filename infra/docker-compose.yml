@@ -1,0 +1,66 @@
+# Everything local, in containers. Nothing here needs a toolchain on the host.
+#
+# The database has a healthcheck and the API waits on it: without that the
+# first boot races the initdb and fails in a way that looks like a bug in the
+# application.
+#
+# Ports are deliberately off the defaults. 5432, 3000 and 5173 are the three
+# most contended ports on a developer machine, and a stack that refuses to
+# start because something else got there first is a bad first impression.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aa
+      POSTGRES_PASSWORD: aa
+      POSTGRES_DB: aa_conciliacion
+    ports: ['5433:5432']
+    volumes: ['db-data:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aa -d aa_conciliacion']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    environment:
+      DATABASE_URL: postgres://aa:aa@db:5432/aa_conciliacion
+      PORT: '3100'
+      TZ: America/Bogota
+    env_file: [../.env]
+    ports: ['3100:3100']
+    depends_on:
+      db: { condition: service_healthy }
+    volumes: ['../data:/app/data', '../config:/app/config']
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        VITE_API_BASE_URL: http://localhost:3100/api/v1
+    ports: ['8090:80']
+    depends_on: [api]
+
+  # The batch pipeline, in the same image as the API so it reads the same
+  # config and writes to the same database. Not started by `up`; run on demand:
+  #   docker compose --profile tools run --rm cli demo --from=… --to=…
+  cli:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    profiles: [tools]
+    environment:
+      DATABASE_URL: postgres://aa:aa@db:5432/aa_conciliacion
+      TZ: America/Bogota
+    env_file: [../.env]
+    depends_on:
+      db: { condition: service_healthy }
+    volumes: ['../data:/app/data', '../config:/app/config']
+    entrypoint: ['pnpm', '--filter', '@aa/cli', 'exec', 'tsx', 'src/main.ts']
+
+volumes:
+  db-data:
