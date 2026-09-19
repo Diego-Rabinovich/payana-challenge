@@ -4,7 +4,7 @@ import type { BatchId } from '../domain/ids.js';
 import type { RejectedCandidate } from '../domain/match-result.js';
 import type { RuleSet } from '../domain/ruleset.js';
 import type { SettlementBatch } from '../domain/settlement-batch.js';
-import type { Candidate } from './matching-rule.js';
+import { type Candidate, candidateKey, depositIdsOf } from './matching-rule.js';
 
 export interface BatchAssignment {
   readonly batch: SettlementBatch;
@@ -16,11 +16,15 @@ export interface BatchAssignment {
 /**
  * Decides which credit settles which batch.
  *
- * Not a 1:1 walk by date. Two batches can want the same credit, a day can
- * carry two credits, and a quiet day can be followed by a double one — so it
- * is an assignment over the whole field, resolved by a stable greedy pass:
- * the strongest pair wins, both sides are consumed, and the next strongest
- * gets its turn.
+ * Not a 1:1 walk by date. Two batches can want the same credit, a batch can
+ * arrive split across two credits, and a quiet day can be followed by a
+ * double one — so it is an assignment over the whole field, resolved by a
+ * stable greedy pass: the strongest pair wins, every credit it claims is
+ * consumed, and the next strongest gets its turn over what is left.
+ *
+ * Consuming the whole set rather than one credit is what keeps the result
+ * coherent: a credit cannot both complete a split settlement and stand alone
+ * as another batch's match.
  *
  * Uniqueness is decided here rather than inside a rule, because no rule can
  * see the other candidates. A runner-up within `ambiguityDelta` forces
@@ -49,7 +53,10 @@ export function assignCandidates(
     (a, b) =>
       b.score - a.score ||
       compare(a.batch.id, b.batch.id) ||
-      compare(a.candidate.deposit.id, b.candidate.deposit.id),
+      // Fewer credits first, so a clean single settlement beats a split that
+      // happens to score the same. The brief's rule stays the priority.
+      a.candidate.deposits.length - b.candidate.deposits.length ||
+      compare(candidateKey(a.candidate), candidateKey(b.candidate)),
   );
 
   const takenBatches = new Set<BatchId>();
@@ -57,9 +64,15 @@ export function assignCandidates(
   const winners = new Map<BatchId, Candidate>();
 
   for (const pair of pairs) {
-    if (takenBatches.has(pair.batch.id) || takenDeposits.has(pair.candidate.deposit.id)) continue;
+    const claimed = depositIdsOf(pair.candidate);
+    // A candidate with no deposits explains why nothing matched; it never
+    // wins, so it cannot consume a batch that a real credit could still take.
+    if (claimed.length === 0) continue;
+    if (takenBatches.has(pair.batch.id)) continue;
+    if (claimed.some((id) => takenDeposits.has(id))) continue;
+
     takenBatches.add(pair.batch.id);
-    takenDeposits.add(pair.candidate.deposit.id);
+    for (const id of claimed) takenDeposits.add(id);
     winners.set(pair.batch.id, pair.candidate);
   }
 
@@ -115,7 +128,7 @@ function settle(
 function reject(candidate: Candidate, score: number, contested = false): RejectedCandidate {
   const failed = candidate.evidence.find((item) => !item.passed);
   return {
-    movementId: candidate.deposit.id,
+    movementIds: depositIdsOf(candidate),
     score,
     rejectedBecause: failed?.code ?? (contested ? 'COMPETING_CANDIDATE' : 'AMOUNT_MISMATCH'),
   };
@@ -138,7 +151,7 @@ function unmatchedEvidence(candidates: readonly Candidate[]): Evidence[] {
 }
 
 function key(batchId: BatchId, candidate: Candidate): string {
-  return `${batchId}|${candidate.deposit.id}`;
+  return `${batchId}|${candidateKey(candidate)}`;
 }
 
 function compare(a: string, b: string): number {

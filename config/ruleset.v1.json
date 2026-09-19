@@ -1,61 +1,82 @@
 {
   "version": "v1",
   "description": "Phase 2 matching rubric. Every number here is a proposal to be calibrated against the first days of real data, not a truth. The version travels in every MatchResult so a result can always be reproduced. See ADR-0005.",
-
   "settlementWindow": {
     "fromBusinessDays": 1,
     "toBusinessDays": 3,
     "basis": "BUSINESS_DAYS"
   },
-
   "tolerances": {
     "roundingCents": 10000,
     "identityCents": 1,
-    "impliedFeeRateBand": [0.02, 0.05]
+    "impliedFeeRateBand": [
+      0.04,
+      0.05
+    ]
   },
-
   "weights": {
     "AMOUNT_EXACT": 50,
-    "AMOUNT_WITHIN_ROUNDING": 30,
-    "IMPLIED_FEE_IN_BAND": 25,
+    "AMOUNT_WITHIN_ROUNDING": 25,
+    "IMPLIED_FEE_IN_BAND": 20,
     "DATE_T1_EXACT": 25,
     "DATE_IN_WINDOW": 15,
     "DESCRIPTOR_MATCH": 15,
     "UNIQUE_CANDIDATE": 10,
-    "IDENTITY_HOLDS": 10
+    "IDENTITY_HOLDS": 10,
+    "SETTLEMENT_SINGLE_CREDIT": 25
   },
-
   "exclusiveDimensions": {
-    "AMOUNT": ["AMOUNT_EXACT", "AMOUNT_WITHIN_ROUNDING", "IMPLIED_FEE_IN_BAND"],
-    "DATE": ["DATE_T1_EXACT", "DATE_IN_WINDOW"]
+    "AMOUNT": [
+      "AMOUNT_EXACT",
+      "AMOUNT_WITHIN_ROUNDING",
+      "IMPLIED_FEE_IN_BAND"
+    ],
+    "DATE": [
+      "DATE_T1_EXACT",
+      "DATE_IN_WINDOW"
+    ]
   },
-
   "bands": {
     "CONFIRMED": 85,
     "PROBABLE": 60,
     "AMBIGUOUS": 40
   },
-
   "ambiguityDelta": 10,
-
   "subsetSum": {
     "maxSubsetSize": 60,
     "maxSolutions": 5,
     "toleranceCents": 100,
     "maxNodes": 200000
   },
-
   "channels": {
     "wompi": {
-      "counterpartyPatterns": ["WOMPI"]
+      "counterpartyPatterns": [
+        "WOMPI"
+      ]
     },
     "pos": {
-      "counterpartyPatterns": ["REDEBAN", "CREDIBANCO"]
+      "counterpartyPatterns": [
+        "REDEBAN",
+        "CREDIBANCO"
+      ]
     },
     "druo": {
-      "counterpartyPatterns": ["DRUO"]
+      "counterpartyPatterns": [
+        "DRUO"
+      ]
     }
   },
-
-  "channelNotes": "Patterns say how a channel names itself on a bank statement. This is reconciliation policy, not an ingestion fact: config/descriptors.json records the counterparty a descriptor names, and this decides whether that name is the channel we expected. Keeping them apart is what stops DESCRIPTOR_MATCH from scoring a conclusion ingestion already reached."
+  "channelNotes": "Patterns say how a channel names itself on a bank statement. This is reconciliation policy, not an ingestion fact: config/descriptors.json records the counterparty a descriptor names, and this decides whether that name is the channel we expected. Keeping them apart is what stops DESCRIPTOR_MATCH from scoring a conclusion ingestion already reached.",
+  "statutoryRates": {
+    "vat": {
+      "numerator": 19,
+      "denominator": 100
+    },
+    "withholding": {
+      "numerator": 15,
+      "denominator": 1000
+    },
+    "note": "Colombian VAT on services and withholding at source on card sales. Law, not gateway policy — which is why the deduction split needs only one unknown. See ADR-0013."
+  },
+  "weightNotes": "SETTLEMENT_SINGLE_CREDIT is weighted like DATE_T1_EXACT because it answers the same kind of question: did the money arrive the way the agreement says it should. Adding it raised the attainable maximum from 110 to 135, so the amount weights were recalibrated against the bands rather than left alone: with 135 attainable, an amount that is only within rounding must stay under 25 for a settlement with every other check green to land in PROBABLE instead of CONFIRMED. A batch that arrived split forfeits 25 and lands at 81, which is PROBABLE."
 }

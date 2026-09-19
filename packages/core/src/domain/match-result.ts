@@ -26,9 +26,27 @@ export interface MatchAmounts {
   readonly impliedDeductionRate?: number;
 }
 
+/**
+ * The breakdown recovered from the gap when the gateway did not report one.
+ *
+ * Kept apart from `amounts` on purpose: a reader has to be able to tell a
+ * figure the source stated from one the system computed, and folding these
+ * into the expectation would erase that distinction. See ADR-0013.
+ */
+export interface DerivedDeductions {
+  readonly fee: Money;
+  readonly tax: Money;
+  readonly withholding: Money;
+  readonly total: Money;
+  readonly impliedRate: number;
+  /** Whether the split is consistent with the statutory VAT rate. */
+  readonly consistent: boolean;
+}
+
 /** A candidate that lost, and the check that cost it the match. */
 export interface RejectedCandidate {
-  readonly movementId: MovementId;
+  /** The credits it proposed. More than one when it was a split. */
+  readonly movementIds: readonly MovementId[];
   readonly score: number;
   readonly rejectedBecause: EvidenceCode;
 }
@@ -45,7 +63,11 @@ export interface MatchResult {
     readonly batchDate: Temporal.PlainDate;
     readonly chargeIds: readonly MovementId[];
   };
-  readonly right: { readonly movementId: MovementId } | null;
+  /**
+   * The credits that settled it. Usually one; several when the batch arrived
+   * split, which the evidence then says out loud. Null when nothing matched.
+   */
+  readonly right: { readonly movementIds: readonly MovementId[] } | null;
   readonly rule: { readonly id: string; readonly version: number };
   readonly amounts: MatchAmounts;
   readonly window: {
@@ -54,6 +76,8 @@ export interface MatchResult {
     readonly basis: 'BUSINESS_DAYS';
   };
   readonly confidence: Confidence;
+  /** Present when the gateway reported no breakdown and one was derived. */
+  readonly derivedDeductions?: DerivedDeductions;
   /** Everything the matcher considered and set aside, with the reason. */
   readonly alternatives: readonly RejectedCandidate[];
 }

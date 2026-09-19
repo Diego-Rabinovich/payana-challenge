@@ -44,6 +44,6 @@ export function sha256(value: string | Uint8Array): string {
 }
 
 /** Stable across runs, so a rerun updates a match instead of duplicating it. */
-export function deriveMatchId(batch: BatchId, depositId?: MovementId): MatchId {
-  return matchId(`mat_${sha256(`${batch}|${depositId ?? 'none'}`).slice(0, ID_LENGTH)}`);
+export function deriveMatchId(batch: BatchId, deposits?: string): MatchId {
+  return matchId(`mat_${sha256(`${batch}|${deposits ?? 'none'}`).slice(0, ID_LENGTH)}`);
 }

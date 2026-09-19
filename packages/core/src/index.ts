@@ -1,6 +1,10 @@
+export * from './domain/account-map.js';
 export * from './domain/account.js';
 export * from './domain/business-calendar.js';
 export * from './domain/confidence.js';
+export * from './domain/deduction-model.js';
+export * from './domain/erp-entry.js';
+export * from './domain/erp-reconciliation.js';
 export * from './domain/errors.js';
 export * from './domain/evidence.js';
 export * from './domain/identity.js';
@@ -10,20 +14,30 @@ export * from './domain/match-result.js';
 export * from './domain/money.js';
 export * from './domain/money-math.js';
 export * from './domain/movement.js';
+export * from './domain/erp-correction.js';
 export * from './domain/ruleset.js';
 export * from './domain/settlement-batch.js';
+export * from './domain/settlement-policy.js';
 export * from './domain/subset-sum.js';
 
 export * from './ports/clock.js';
 export * from './ports/connector-registry.js';
+export * from './ports/erp-gateway.js';
+export * from './ports/queries.js';
 export * from './ports/record-parser.js';
 export * from './ports/repositories.js';
 export * from './ports/source-connector.js';
 
 export * from './rules/assignment.js';
+export * from './rules/erp-assessment.js';
+export * from './rules/erp-entry-index.js';
+export * from './rules/erp-match-strategy.js';
 export * from './rules/matching-rule.js';
-export * from './rules/t1-daily-batch.rule.js';
+export * from './rules/scheduled-settlement.rule.js';
+export * from './rules/settlement-evidence.js';
+export * from './rules/split-settlement.rule.js';
 
 export * from './usecases/ingest-source.js';
+export * from './usecases/reconcile-erp.js';
 export * from './usecases/reconcile-flow.js';
 export * from './usecases/trace-movement.js';

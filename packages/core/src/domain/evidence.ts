@@ -3,8 +3,13 @@
  *
  * Closed on purpose: it lets an AI cite `IMPLIED_FEE_IN_BAND` and have it mean
  * the same thing every time, and it lets the frontend render Spanish without
- * the backend generating prose. A code emitted but absent from
- * docs/EVIDENCE-CODES.md breaks the build (F04-T07). See ADR-0007.
+ * the backend generating prose.
+ *
+ * `@aa/contracts` publishes the same list as a zod enum, because the vocabulary
+ * is part of the wire. The domain keeps this plain union rather than importing
+ * it: `core` takes no dependency on zod and is not shaped by the wire format.
+ * A test in `apps/api` asserts the two are identical, so drift breaks the
+ * build. See ADR-0007 and ADR-0010.
  */
 export const EVIDENCE_CODES = [
   // —— Phase 2: channel to bank
@@ -21,6 +26,8 @@ export const EVIDENCE_CODES = [
   'COMPETING_CANDIDATE',
   'IDENTITY_HOLDS',
   'IDENTITY_BROKEN',
+  'SETTLEMENT_SINGLE_CREDIT',
+  'SETTLEMENT_SPLIT',
   'SUBSET_SUM_UNIQUE',
   'SUBSET_SUM_MULTIPLE',
   'UNRESOLVED_COMBINATORIAL',
@@ -45,6 +52,7 @@ export const EVIDENCE_CODES = [
   'TRANSACTION_EXCLUDED_NOT_APPROVED',
   'DESCRIPTOR_UNCLASSIFIED',
   'SOURCE_STALE',
+  'DEDUCTIONS_DERIVED',
 ] as const;
 
 export type EvidenceCode = (typeof EVIDENCE_CODES)[number];

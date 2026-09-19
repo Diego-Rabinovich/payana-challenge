@@ -7,7 +7,8 @@ import type { Movement, MovementType } from '../src/domain/movement.js';
 import { InMemoryMovementRepository } from '../src/testing/in-memory-repositories.js';
 import { TEST_HOLIDAYS, testRuleSet } from '../src/testing/ruleset-fixture.js';
 import { aMovement } from '../src/testing/builders.js';
-import { T1DailyBatchRule } from '../src/rules/t1-daily-batch.rule.js';
+import { ScheduledSettlementRule } from '../src/rules/scheduled-settlement.rule.js';
+import { SplitSettlementRule } from '../src/rules/split-settlement.rule.js';
 import { ReconcileFlow } from '../src/usecases/reconcile-flow.js';
 
 const WOMPI = accountId('wompi:AA');
@@ -73,7 +74,7 @@ describe('ReconcileFlow', () => {
       movements,
       new BusinessCalendar(TEST_HOLIDAYS),
       testRuleSet(),
-      [new T1DailyBatchRule()],
+      [new ScheduledSettlementRule(), new SplitSettlementRule()],
     );
   });
 
@@ -95,6 +96,7 @@ describe('ReconcileFlow', () => {
       'DATE_T1_EXACT',
       'DESCRIPTOR_MATCH',
       'IDENTITY_HOLDS',
+      'SETTLEMENT_SINGLE_CREDIT',
       'UNIQUE_CANDIDATE',
     ]);
   });
@@ -108,7 +110,7 @@ describe('ReconcileFlow', () => {
     const [match] = (await run()).matches;
 
     expect(match?.left.chargeIds).toHaveLength(1); // which movements
-    expect(match?.rule).toEqual({ id: 'T1_DAILY_BATCH', version: 1 }); // which rule
+    expect(match?.rule).toEqual({ id: 'SCHEDULED_SETTLEMENT', version: 2 }); // which rule
     expect(match?.amounts.delta?.cents).toBe(0); // which adjustment
     expect(match?.window).toMatchObject({ basis: 'BUSINESS_DAYS' }); // which window
     expect(match?.confidence.band).toBe('CONFIRMED'); // how confident
@@ -186,7 +188,7 @@ describe('ReconcileFlow', () => {
     ]);
 
     const report = await run();
-    const claimed = report.matches.map((m) => m.right?.movementId);
+    const claimed = report.matches.map((m) => m.right?.movementIds[0]);
 
     expect(new Set(claimed).size).toBe(2);
     expect(report.matches.every((m) => m.right !== null)).toBe(true);
