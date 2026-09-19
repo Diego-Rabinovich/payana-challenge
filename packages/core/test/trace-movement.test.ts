@@ -1,5 +1,9 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it } from 'vitest';
+import { BusinessCalendar } from '../src/domain/business-calendar.js';
+import { TEST_HOLIDAYS } from '../src/testing/ruleset-fixture.js';
+
+const CAL = new BusinessCalendar(TEST_HOLIDAYS);
 import { accountId } from '../src/domain/ids.js';
 import { Money } from '../src/domain/money.js';
 import type { Movement, MovementType } from '../src/domain/movement.js';
@@ -33,7 +37,7 @@ function aDay() {
     part('TAX', -333_431, 'tax'),
     part('WITHHOLDING', -1_067_772, 'withholding'),
   ];
-  const [batch] = buildSettlementBatches({ accountId: WOMPI, movements });
+  const [batch] = buildSettlementBatches({ calendar: CAL, accountId: WOMPI, movements });
   return { charges, batch: batch! };
 }
 

@@ -74,6 +74,27 @@ export interface Evidence {
   readonly code: EvidenceCode;
   readonly dimension: EvidenceDimension;
   readonly passed: boolean;
+  /**
+   * False when the check could not be run at all, as opposed to run and
+   * failed. A source that reports no deductions leaves nothing to verify;
+   * scoring that as a failure charges the same fact twice, once for the
+   * check we could not run and again for the exactness we could not reach.
+   * An inapplicable check is excluded from the denominator as well as the
+   * numerator, so it moves the score neither way.
+   */
+  readonly applicable?: boolean;
+  /**
+   * True when this is the strongest form of its check the data allowed.
+   *
+   * Wompi publishes an amount and no breakdown, so AMOUNT_EXACT cannot be
+   * reached: you cannot be exact against a figure nobody stated. Leaving its
+   * weight in the denominator capped every settlement at PROBABLE for ever,
+   * which made the confirmed count a permanent zero and the review queue one
+   * that never empties. The ceiling for that dimension becomes this code's
+   * weight instead, and DEDUCTIONS_DERIVED travels alongside to say the
+   * breakdown was inferred rather than read.
+   */
+  readonly bestAvailable?: boolean;
   /** Contribution to the score, from the ruleset. Absent outside Phase 2. */
   readonly weight?: number;
   readonly expected?: string;

@@ -1,5 +1,9 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it } from 'vitest';
+import { BusinessCalendar } from '../src/domain/business-calendar.js';
+import { TEST_HOLIDAYS } from '../src/testing/ruleset-fixture.js';
+
+const CAL = new BusinessCalendar(TEST_HOLIDAYS);
 import { Money } from '../src/domain/money.js';
 import type { Movement, MovementType } from '../src/domain/movement.js';
 import {
@@ -37,6 +41,7 @@ const SALE = { gross: 31_754_900, fee: 786_240, tax: 149_385, withholding: 476_3
 describe('buildSettlementBatches (F02-T03)', () => {
   it('groups a day of sales into one batch and computes what the bank should receive', () => {
     const [batch] = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: aSale('2025-12-31', SALE),
     });
@@ -48,6 +53,7 @@ describe('buildSettlementBatches (F02-T03)', () => {
 
   it('keeps the three deductions apart, so the ERP entry can be built from them', () => {
     const [batch] = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: aSale('2025-12-31', SALE),
     });
@@ -62,6 +68,7 @@ describe('buildSettlementBatches (F02-T03)', () => {
 
   it('marks deductions EXPLICIT when the source reported them', () => {
     const [batch] = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: aSale('2025-12-31', SALE),
     });
@@ -71,6 +78,7 @@ describe('buildSettlementBatches (F02-T03)', () => {
 
   it('separates days into their own batches, in date order', () => {
     const batches = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: [...aSale('2026-01-02', SALE), ...aSale('2025-12-31', SALE)],
     });
@@ -80,6 +88,7 @@ describe('buildSettlementBatches (F02-T03)', () => {
 
   it('adds up several sales on the same day', () => {
     const batches = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: [
         ...aSale('2025-12-31', SALE),
@@ -101,6 +110,7 @@ describe('buildSettlementBatches (F02-T03)', () => {
     });
 
     const [batch] = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: [...aSale('2025-12-31', SALE), refund],
     });
@@ -111,6 +121,7 @@ describe('buildSettlementBatches (F02-T03)', () => {
 
   it('ignores movements belonging to another account', () => {
     const batches = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: [aMovement({ accountId: 'bancolombia:other' as never, type: 'CHARGE' })],
     });
@@ -119,12 +130,12 @@ describe('buildSettlementBatches (F02-T03)', () => {
   });
 
   it('gives a day with no activity no batch at all (F02-T09)', () => {
-    expect(buildSettlementBatches({ accountId: WOMPI_ACCOUNT, movements: [] })).toEqual([]);
+    expect(buildSettlementBatches({ calendar: CAL, accountId: WOMPI_ACCOUNT, movements: [] })).toEqual([]);
   });
 
   it('derives the same batch id for the same account and day', () => {
-    const once = buildSettlementBatches({ accountId: WOMPI_ACCOUNT, movements: aSale('2025-12-31', SALE) });
-    const twice = buildSettlementBatches({ accountId: WOMPI_ACCOUNT, movements: aSale('2025-12-31', SALE) });
+    const once = buildSettlementBatches({ calendar: CAL, accountId: WOMPI_ACCOUNT, movements: aSale('2025-12-31', SALE) });
+    const twice = buildSettlementBatches({ calendar: CAL, accountId: WOMPI_ACCOUNT, movements: aSale('2025-12-31', SALE) });
 
     expect(once[0]?.id).toBe(twice[0]?.id);
     expect(once[0]?.id).toMatch(/^bat_[0-9a-f]{16}$/);
@@ -134,6 +145,7 @@ describe('buildSettlementBatches (F02-T03)', () => {
 describe('identityHolds', () => {
   it('confirms that gross equals net plus every deduction', () => {
     const [batch] = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: aSale('2025-12-31', SALE),
     });
@@ -143,6 +155,7 @@ describe('identityHolds', () => {
 
   it('is the same identity the ERP entry has to balance on', () => {
     const [batch] = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: aSale('2025-12-31', SALE),
     });

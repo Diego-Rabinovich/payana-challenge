@@ -100,6 +100,15 @@ export interface ReconciliationReport {
   readonly totals: {
     readonly batches: number;
     readonly byStatus: Readonly<Partial<Record<MatchStatus, number>>>;
+    readonly gross: Money;
+    /**
+     * What the gateway kept. Reported where the source states it, derived from
+     * the gap where it does not — which for Wompi is always, and leaving it at
+     * zero made the panel claim the whole commission was unexplained money.
+     */
+    readonly deductions: Money;
+    readonly deductionsAreDerived: boolean;
+    /** gross − deductions: what should have reached the bank. */
     readonly expectedNet: Money;
     readonly observedNet: Money;
     readonly unexplained: Money;

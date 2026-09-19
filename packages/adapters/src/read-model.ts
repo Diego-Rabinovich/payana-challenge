@@ -14,6 +14,7 @@ import {
   runId as asRunId,
   traceMovement,
 } from '@aa/core';
+import { reviveErpReport, reviveFlowReport } from './persistence/revive.js';
 import type { Dependencies } from './composition.js';
 
 /**
@@ -38,7 +39,12 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     },
   ];
 
-  const latestFlow = () => repositories.reports.latest<ReconciliationReport>('flow', 'wompi');
+  // Revived, not cast: what comes back from Postgres is JSON, and the domain
+  // objects have to be rebuilt before anything calls a method on them.
+  const latestFlow = async (): Promise<ReconciliationReport | undefined> => {
+    const stored = await repositories.reports.latest<unknown>('flow', 'wompi');
+    return stored ? reviveFlowReport(stored) : undefined;
+  };
 
   return {
     version,
@@ -101,8 +107,10 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     },
 
     erp: {
-      erpReconciliation: async ({ journalKey }) =>
-        repositories.reports.latest<ErpReconciliationReport>('erp', journalKey),
+      erpReconciliation: async ({ journalKey }) => {
+        const stored = await repositories.reports.latest<unknown>('erp', journalKey);
+        return stored ? reviveErpReport(stored) : undefined;
+      },
     },
 
     runs: {
@@ -128,7 +136,7 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
 
   async function currentBatches(): Promise<SettlementBatch[]> {
     const movements = await repositories.movements.findByAccount(accounts.wompi);
-    return buildSettlementBatches({ accountId: accounts.wompi, movements });
+    return buildSettlementBatches({ calendar, accountId: accounts.wompi, movements });
   }
 
   async function buildLineage(movementId: string): Promise<Lineage | undefined> {

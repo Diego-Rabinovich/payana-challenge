@@ -90,6 +90,7 @@ export class ReconcileFlow {
     const batches = buildSettlementBatches({
       accountId: input.gatewayAccountId,
       movements: gatewayMovements,
+      calendar: this.calendar,
       policy,
     });
 
@@ -274,7 +275,17 @@ function summarise(
     byStatus[match.status] = (byStatus[match.status] ?? 0) + 1;
   }
 
-  const expectedNet = Money.sum(batches.map((batch) => batch.expectedNet));
+  const gross = Money.sum(batches.map((batch) => batch.gross));
+  const reported = Money.sum(batches.map((batch) => batch.gross.minus(batch.expectedNet)));
+  const derived = Money.sum(
+    matches.map((match) => match.derivedDeductions?.total ?? Money.zero()),
+  );
+
+  // Reported where the source gave it, derived where it did not. Showing zero
+  // because the gateway is silent turned a commission into a hole in the
+  // funnel, which is the first thing a CFO reads.
+  const deductions = reported.isZero() ? derived : reported;
+  const expectedNet = gross.minus(deductions);
   const observedNet = Money.sum(
     matches.map((match) => match.amounts.observedNet ?? Money.zero()),
   );
@@ -282,6 +293,9 @@ function summarise(
   return {
     batches: batches.length,
     byStatus,
+    gross,
+    deductions,
+    deductionsAreDerived: reported.isZero() && !derived.isZero(),
     expectedNet,
     observedNet,
     unexplained: expectedNet.minus(observedNet),

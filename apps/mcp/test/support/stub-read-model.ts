@@ -113,6 +113,9 @@ const FLOW_REPORT: ReconciliationReport = {
   totals: {
     batches: 2,
     byStatus: { CONFIRMED: 1, AMBIGUOUS: 1 },
+    gross: Money.ofCents(63_509_800),
+    deductions: Money.ofCents(2_823_896),
+    deductionsAreDerived: true,
     expectedNet: Money.ofCents(60_685_904),
     observedNet: Money.ofCents(60_685_904),
     unexplained: Money.zero(),

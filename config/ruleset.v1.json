@@ -52,7 +52,19 @@
     "wompi": {
       "counterpartyPatterns": [
         "WOMPI"
-      ]
+      ],
+      "settlement": {
+        "cadence": "DAILY",
+        "cutoff": {
+          "time": "21:00",
+          "timeZone": "America/Bogota"
+        },
+        "window": {
+          "fromBusinessDays": 1,
+          "toBusinessDays": 3
+        }
+      },
+      "cutoffNotes": "Fitted against Jan-Apr 2026, not documented by Wompi. A sweep from 14:00 to midnight peaks sharply at 21:00 Bogota: 50 of 56 batches then close against the bank within the statutory 3-6% deduction band, versus 36 of 54 assuming midnight. Re-fit it if the gateway changes; it is one number in one file precisely so that is cheap."
     },
     "pos": {
       "counterpartyPatterns": [
@@ -78,5 +90,11 @@
     },
     "note": "Colombian VAT on services and withholding at source on card sales. Law, not gateway policy — which is why the deduction split needs only one unknown. See ADR-0013."
   },
-  "weightNotes": "SETTLEMENT_SINGLE_CREDIT is weighted like DATE_T1_EXACT because it answers the same kind of question: did the money arrive the way the agreement says it should. Adding it raised the attainable maximum from 110 to 135, so the amount weights were recalibrated against the bands rather than left alone: with 135 attainable, an amount that is only within rounding must stay under 25 for a settlement with every other check green to land in PROBABLE instead of CONFIRMED. A batch that arrived split forfeits 25 and lands at 81, which is PROBABLE."
+  "weightNotes": "SETTLEMENT_SINGLE_CREDIT is weighted like DATE_T1_EXACT because it answers the same kind of question: did the money arrive the way the agreement says it should. Adding it raised the attainable maximum from 110 to 135, so the amount weights were recalibrated against the bands rather than left alone: with 135 attainable, an amount that is only within rounding must stay under 25 for a settlement with every other check green to land in PROBABLE instead of CONFIRMED. A batch that arrived split forfeits 25 and lands at 81, which is PROBABLE.",
+  "disqualifying": [
+    "AMOUNT_MISMATCH",
+    "DESCRIPTOR_FOREIGN",
+    "DATE_OUT_OF_WINDOW"
+  ],
+  "disqualifyingNotes": "Gates, not points. A credit whose amount cannot be explained, that names someone else, or that landed outside the window is not a weak match — it is a different payment. Before this existed a batch of $4.842.430 was matched to a credit of $257.940 and reported as AMBIGUOUS, because the date and descriptor points alone cleared the floor."
 }

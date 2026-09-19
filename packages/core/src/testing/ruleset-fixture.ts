@@ -26,6 +26,7 @@ export const TEST_RULESET_CONFIG: RuleSetConfig = {
   },
   bands: { CONFIRMED: 85, PROBABLE: 60, AMBIGUOUS: 40 },
   ambiguityDelta: 10,
+  disqualifying: ['AMOUNT_MISMATCH', 'DESCRIPTOR_FOREIGN', 'DATE_OUT_OF_WINDOW'],
   subsetSum: {
     maxSubsetSize: 60,
     maxSolutions: 5,

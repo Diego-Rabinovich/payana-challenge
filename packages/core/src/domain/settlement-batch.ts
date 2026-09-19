@@ -3,7 +3,14 @@ import { sha256 } from './identity.js';
 import { type AccountId, type BatchId, type MovementId, batchId } from './ids.js';
 import { Money } from './money.js';
 import type { Movement, MovementType } from './movement.js';
-import { DAILY_T1, type SettlementPolicy, closingDateFor } from './settlement-policy.js';
+import type { BusinessCalendar } from './business-calendar.js';
+import {
+  DAILY_T1,
+  type SettlementPolicy,
+  accrualDateFor,
+  closingDateFor,
+  settlementDateFor,
+} from './settlement-policy.js';
 
 /**
  * A settlement batch: the charges a gateway collected in one cutoff period,
@@ -53,39 +60,66 @@ export function deriveBatchId(accountId: AccountId, date: Temporal.PlainDate): B
 }
 
 /**
- * Groups a gateway ledger into batches, one per cutoff period.
+ * Groups a gateway ledger into the batches that actually settle together.
  *
- * The period comes from the channel's policy, not from this function: daily
- * for Wompi, which is what the brief describes, but a channel that cuts
- * weekly groups a week of charges into one batch with no change here. The
- * cutoff within a day is assumed to be midnight in the business timezone
- * (Q2.1); were it hourly, late payments would belong to the next batch —
- * detectable as a day that misses by exactly its last transactions, and
- * fixable by passing a different `batchDateOf`.
+ * Not by calendar day, which is what this did first and what the data
+ * disproved. A gateway does not transfer on a Sunday: Saturday and Sunday
+ * sales arrive in Monday's payment, together, as one credit. Splitting them
+ * into two batches produced two batches chasing the same credit — which the
+ * matcher correctly reported as ambiguous, over and over, for every weekend in
+ * the period.
+ *
+ * So charges are grouped by the day they are *due*: same due date, same batch.
+ * Over four months of real statements that moved the batches whose amount
+ * closes against the bank from 29 of 65 to 36 of 54.
+ *
+ * `batchDate` stays the cutoff — the last charge in the group — so the
+ * settlement window is still counted the way the brief states it, T+1 business
+ * days after the cutoff.
  */
 export function buildSettlementBatches(input: {
   readonly accountId: AccountId;
   readonly movements: readonly Movement[];
+  readonly calendar: BusinessCalendar;
   readonly policy?: SettlementPolicy;
-  readonly batchDateOf?: (movement: Movement) => Temporal.PlainDate;
+  /** Overrides the due-date grouping. For tests and for odd channels. */
+  readonly batchKeyOf?: (movement: Movement) => Temporal.PlainDate;
 }): SettlementBatch[] {
   const policy = input.policy ?? DAILY_T1;
-  const batchDateOf =
-    input.batchDateOf ?? ((movement: Movement) => closingDateFor(movement.valueDate, policy));
-  const byDate = new Map<string, Movement[]>();
+  const keyOf =
+    input.batchKeyOf ??
+    ((movement: Movement) =>
+      settlementDateFor(accrualDateOf(movement, policy), policy, input.calendar));
+  const byDueDate = new Map<string, Movement[]>();
 
   for (const movement of input.movements) {
     if (movement.accountId !== input.accountId) continue;
     if (!isBatchable(movement.type)) continue;
-    const key = batchDateOf(movement).toString();
-    const bucket = byDate.get(key);
+    const key = keyOf(movement).toString();
+    const bucket = byDueDate.get(key);
     if (bucket) bucket.push(movement);
-    else byDate.set(key, [movement]);
+    else byDueDate.set(key, [movement]);
   }
 
-  return [...byDate.entries()]
+  return [...byDueDate.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([, movements]) => assembleBatch(input.accountId, batchDateOf(movements[0]!), movements));
+    .map(([, movements]) => assembleBatch(input.accountId, cutoffOf(movements, policy), movements));
+}
+
+/**
+ * The cutoff the window is counted from: the latest close among the charges.
+ *
+ * For a daily channel that is the last charge's own day, so a weekend batch is
+ * cut on the Sunday and expected T+1 on the Monday. For a weekly channel every
+ * charge shares the same close, so it is that day.
+ */
+function cutoffOf(
+  movements: readonly Movement[],
+  policy: SettlementPolicy,
+): Temporal.PlainDate {
+  return movements
+    .map((movement) => closingDateFor(accrualDateOf(movement, policy), policy))
+    .reduce((latest, date) => (date.toString() > latest.toString() ? date : latest));
 }
 
 function assembleBatch(
@@ -120,6 +154,10 @@ function assembleBatch(
     deductions,
     expectedNet: gross.minus(totalDeductions(deductions)),
   };
+}
+
+function accrualDateOf(movement: Movement, policy: SettlementPolicy): Temporal.PlainDate {
+  return accrualDateFor(movement.occurredAt, movement.valueDate, policy);
 }
 
 export function totalDeductions(deductions: readonly Deduction[]): Money {

@@ -12,6 +12,8 @@ import { BANK_ACCOUNT, WOMPI_ACCOUNT, aMovement } from '../src/testing/builders.
 import { TEST_HOLIDAYS, TEST_RULESET_CONFIG } from '../src/testing/ruleset-fixture.js';
 import { Money } from '../src/domain/money.js';
 
+const CAL = new BusinessCalendar(TEST_HOLIDAYS);
+
 /**
  * The test the per-channel policy exists to pass.
  *
@@ -96,10 +98,11 @@ describe('a weekly channel, added as configuration only', () => {
       charge('2026-04-17', 500_000),
     ];
 
-    const daily = buildSettlementBatches({ accountId: WOMPI_ACCOUNT, movements: week });
+    const daily = buildSettlementBatches({ calendar: CAL, accountId: WOMPI_ACCOUNT, movements: week });
     expect(daily).toHaveLength(5);
 
     const weekly = buildSettlementBatches({
+      calendar: CAL,
       accountId: WOMPI_ACCOUNT,
       movements: week,
       policy: WEEKLY_CHANNEL.settlement,

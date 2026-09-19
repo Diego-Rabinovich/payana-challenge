@@ -19,6 +19,8 @@ export interface Confidence {
   readonly earned: number;
   readonly attainable: number;
   readonly components: readonly Evidence[];
+  /** Set when a gate failed, which forces UNMATCHED whatever the score. */
+  readonly disqualifiedBy?: EvidenceCode;
 }
 
 export interface ScoringConfig {
@@ -31,6 +33,14 @@ export interface ScoringConfig {
   readonly bands: { readonly CONFIRMED: number; readonly PROBABLE: number; readonly AMBIGUOUS: number };
   /** A runner-up this close forces AMBIGUOUS regardless of score. */
   readonly ambiguityDelta: number;
+  /**
+   * Checks that are gates rather than points. Failing one is not a weak
+   * match, it is not a match: a credit whose amount is nowhere near the
+   * batch was still earning the date and descriptor points and landing in
+   * AMBIGUOUS, which told a reader that we half believed something we did
+   * not believe at all.
+   */
+  readonly disqualifying?: readonly EvidenceCode[];
 }
 
 /**
@@ -40,13 +50,29 @@ export interface ScoringConfig {
  * silently shift what a band means. Exclusive dimensions contribute their best
  * option once; everything else contributes its own weight.
  */
-export function attainableScore(config: ScoringConfig): number {
+export function attainableScore(
+  config: ScoringConfig,
+  evidence: readonly Evidence[] = [],
+): number {
   const exclusive = new Set<EvidenceCode>(Object.values(config.exclusiveDimensions).flat());
 
-  const fromDimensions = Object.values(config.exclusiveDimensions).reduce((total, codes) => {
-    const best = Math.max(0, ...codes.map((code) => config.weights[code] ?? 0));
-    return total + best;
-  }, 0);
+  // A dimension's ceiling is the best option the data allowed, not the best
+  // the table lists. See Evidence.bestAvailable.
+  const capped = new Map<string, number>();
+  for (const item of evidence) {
+    if (item.bestAvailable !== true) continue;
+    for (const [dimension, codes] of Object.entries(config.exclusiveDimensions)) {
+      if (codes.includes(item.code)) capped.set(dimension, config.weights[item.code] ?? 0);
+    }
+  }
+
+  const fromDimensions = Object.entries(config.exclusiveDimensions).reduce(
+    (total, [dimension, codes]) => {
+      const ceiling = capped.get(dimension) ?? Math.max(0, ...codes.map((c) => config.weights[c] ?? 0));
+      return total + ceiling;
+    },
+    0,
+  );
 
   const fromIndependent = Object.entries(config.weights).reduce(
     (total, [code, weight]) => (exclusive.has(code as EvidenceCode) ? total : total + (weight ?? 0)),
@@ -81,7 +107,10 @@ export function scoreMatch(
   config: ScoringConfig,
   options: ScoringOptions = {},
 ): Confidence {
-  const attainable = attainableScore(config);
+  // Checks that could not be run come out of the denominator too, so the
+  // score reads as "of what we could verify" rather than punishing us for
+  // evidence the source never offered.
+  const attainable = attainableScore(config, evidence) - unattainable(evidence, config);
   const passed = evidence.filter((item) => item.passed);
 
   const exclusiveByCode = new Map<EvidenceCode, string>();
@@ -104,14 +133,43 @@ export function scoreMatch(
   }
   for (const weight of bestPerDimension.values()) earned += weight;
 
-  const score = Math.round((earned / attainable) * 100);
+  const score = attainable > 0 ? Math.round((earned / attainable) * 100) : 0;
+  const blocked = disqualifiedBy(evidence, config);
+
   return {
     score,
-    band: bandFor(score, config, options),
+    band: blocked ? 'UNMATCHED' : bandFor(score, config, options),
     earned,
     attainable,
     components: evidence,
+    ...(blocked ? { disqualifiedBy: blocked } : {}),
   };
+}
+
+/** The first gate this candidate failed, if any. */
+export function disqualifiedBy(
+  evidence: readonly Evidence[],
+  config: ScoringConfig,
+): EvidenceCode | undefined {
+  const gates = new Set<EvidenceCode>(config.disqualifying ?? []);
+  return evidence.find((item) => !item.passed && gates.has(item.code))?.code;
+}
+
+/** Weight of every check the evidence marks as not applicable. */
+function unattainable(evidence: readonly Evidence[], config: ScoringConfig): number {
+  const counterpart = new Map<EvidenceCode, EvidenceCode>([
+    // The failing form of a check names the passing form whose weight it
+    // would have earned. Only pairs where 'could not run' is possible.
+    ['IDENTITY_BROKEN', 'IDENTITY_HOLDS'],
+  ]);
+
+  let total = 0;
+  for (const item of evidence) {
+    if (item.applicable !== false) continue;
+    const scored = counterpart.get(item.code) ?? item.code;
+    total += config.weights[scored] ?? 0;
+  }
+  return total;
 }
 
 function bandFor(score: number, config: ScoringConfig, options: ScoringOptions): MatchBand {

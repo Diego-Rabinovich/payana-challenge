@@ -1,4 +1,4 @@
-import { type Confidence, scoreMatch } from '../domain/confidence.js';
+import { type Confidence, disqualifiedBy, scoreMatch } from '../domain/confidence.js';
 import { type Evidence, evidence } from '../domain/evidence.js';
 import type { BatchId } from '../domain/ids.js';
 import type { RejectedCandidate } from '../domain/match-result.js';
@@ -43,6 +43,10 @@ export function assignCandidates(
     for (const candidate of candidatesByBatch.get(batch.id) ?? []) {
       const score = scoreMatch(candidate.evidence, ruleSet.scoring).score;
       provisional.set(key(batch.id, candidate), score);
+      // A candidate that failed a gate is kept as a rejected alternative so the
+      // report can say what was looked at, but it never enters the assignment.
+      // Letting it compete is how a credit 95% off the batch ended up winning.
+      if (disqualifiedBy(candidate.evidence, ruleSet.scoring)) continue;
       pairs.push({ batch, candidate, score });
     }
   }

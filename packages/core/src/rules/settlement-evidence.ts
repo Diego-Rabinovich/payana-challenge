@@ -136,10 +136,16 @@ export function amountEvidence(
   const rate = amounts.impliedDeductionRate ?? Number.NaN;
   const [low, high] = ruleSet.config.tolerances.impliedFeeRateBand;
   if (reportedNothing && rate >= low && rate <= high) {
-    return evidence('IMPLIED_FEE_IN_BAND', 'AMOUNT', true, {
-      ...context,
-      detail: `implied deduction rate ${(rate * 100).toFixed(2)}%`,
-    });
+    return {
+      ...evidence('IMPLIED_FEE_IN_BAND', 'AMOUNT', true, {
+        ...context,
+        detail: `tasa de deducción implícita ${(rate * 100).toFixed(2)}%`,
+      }),
+      // The source published no breakdown, so this is as exact as the amount
+      // check can get. Scoring it against AMOUNT_EXACT would measure us
+      // against evidence that does not exist.
+      bestAvailable: true,
+    };
   }
 
   return evidence('AMOUNT_MISMATCH', 'AMOUNT', false, {
@@ -204,14 +210,18 @@ export function identityEvidence(batch: SettlementBatch, ruleSet: RuleSet): Evid
     observed: batch.expectedNet.plus(totalDeductions(batch.deductions)).toString(),
   };
 
-  // With nothing reported there is no identity to check, so this cannot pass.
-  // The match then tops out below 100, which is the honest outcome: we know
-  // less about it than about one whose breakdown we could verify.
+  // Nothing reported means there is no identity to check — not that it
+  // failed. Reporting it as a failure printed two identical figures under
+  // the words "does not balance", which is the opposite of explaining
+  // anything, and charged the score for a fact the amount check already
+  // accounts for.
   if (batch.deductions.length === 0) {
-    return evidence('IDENTITY_BROKEN', 'INTEGRITY', false, {
-      ...context,
-      detail: 'source reported no deductions to verify',
-    });
+    return {
+      ...evidence('IDENTITY_BROKEN', 'INTEGRITY', false, {
+        detail: 'la fuente no informa comisiones, no hay desglose que verificar',
+      }),
+      applicable: false,
+    };
   }
   return holds
     ? evidence('IDENTITY_HOLDS', 'INTEGRITY', true, context)
