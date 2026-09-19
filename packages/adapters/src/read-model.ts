@@ -85,7 +85,13 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       listReconciliations: async ({ status }) => {
         const report = await latestFlow();
         const matches = report?.matches ?? [];
-        return status ? matches.filter((match) => match.status === status) : matches;
+        if (!status) return matches;
+
+        // The wire says `ambiguous`, a MatchStatus says `AMBIGUOUS`. Comparing
+        // them directly returned an empty list for every filter, which read as
+        // "nothing to review" rather than as a bug.
+        const wanted = status.toUpperCase();
+        return matches.filter((match) => match.status.toUpperCase() === wanted);
       },
 
       findReconciliation: async (matchId) =>

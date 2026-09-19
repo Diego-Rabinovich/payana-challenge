@@ -10,7 +10,7 @@ Each phase has a spec. A spec states **what gets built**, **how it is tested** a
 | 03 | [Phase 3 — Ledger-to-ERP reconciliation](03-phase3-erp.md) | 01 | 🔨 Core implemented |
 | 04 | [API and outputs](04-api-outputs.md) | 02, 03 | 🔨 Core implemented |
 | 05 | [CFO frontend](05-frontend.md) | 04 | 🔨 Core implemented |
-| 06 | [The AI user](06-ai-user.md) — agent-legible repo, MCP server | 04 | 📝 Draft |
+| 06 | [The AI user](06-ai-user.md) — agent-legible repo, MCP server | 04 | ✅ Done |
 
 **Status:** 📝 Draft → 🔒 Frozen (agreed, being implemented) → 🔨 In progress → ✅ Done (DoD verified).
 

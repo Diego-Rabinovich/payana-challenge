@@ -1,0 +1,27 @@
+{
+  "name": "@aa/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "aa-mcp": "./src/main.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aa/adapters": "workspace:*",
+    "@aa/contracts": "workspace:^",
+    "@aa/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.1",
+    "zod-to-json-schema": "^3.24.1"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8",
+    "@js-temporal/polyfill": "^0.5.1"
+  },
+  "_comment": "Read-only tools over the same read model the API uses. No tool computes anything and none of them writes. See docs/spec/06-ai-user.md."
+}

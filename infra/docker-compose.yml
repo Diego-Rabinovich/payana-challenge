@@ -62,5 +62,23 @@ services:
     volumes: ['../data:/app/data', '../config:/app/config']
     entrypoint: ['pnpm', '--filter', '@aa/cli', 'exec', 'tsx', 'src/main.ts']
 
+  # Read-only tools for an AI client. Speaks stdio, so a client spawns it
+  # rather than connecting to it:
+  #   docker compose --profile tools run --rm -T mcp
+  mcp:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    profiles: [tools]
+    environment:
+      DATABASE_URL: postgres://aa:aa@db:5432/aa_conciliacion
+      TZ: America/Bogota
+    env_file: [../.env]
+    depends_on:
+      db: { condition: service_healthy }
+    volumes: ['../data:/app/data', '../config:/app/config']
+    stdin_open: true
+    entrypoint: ['pnpm', '--filter', '@aa/mcp', 'exec', 'tsx', 'src/main.ts']
+
 volumes:
   db-data:

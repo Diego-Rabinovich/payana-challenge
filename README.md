@@ -52,6 +52,15 @@ make down                          # stop everything
 `make demo` prints a summary and writes `data/out/report.md` for a person and
 `data/out/report.json` for a machine.
 
+### For an AI client
+
+The MCP server exposes the results as read-only tools over stdio. Configuration
+and a worked session are in [docs/MCP.md](docs/MCP.md).
+
+```bash
+docker compose -f infra/docker-compose.yml --profile tools run --rm -T mcp
+```
+
 ### Working on it
 
 The test suite and the type checker run on the host and need pnpm:
