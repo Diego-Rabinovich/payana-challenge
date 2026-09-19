@@ -32,6 +32,8 @@ const PHRASES: Readonly<Record<EvidenceCode, Phrase>> = {
   IDENTITY_BROKEN: (e) => `El desglose no cierra${e.detail ? `: ${e.detail}` : ''}.`,
   SETTLEMENT_SINGLE_CREDIT: (e) =>
     `Llegó en una sola acreditación${e.observed ? `: ${e.observed}` : ''}.`,
+  SETTLEMENT_MERGED: (e) =>
+    `No tuvo acreditación propia: ${e.detail ?? 'se cobró junto con otro corte'}.`,
   SETTLEMENT_SPLIT: (e) =>
     `El lote no llegó en una sola acreditación: ${e.observed ?? 'varias'}${e.detail ? ` (${e.detail})` : ''}.`,
   SUBSET_SUM_UNIQUE: () => 'Se encontró una única combinación de pagos que suma el depósito.',

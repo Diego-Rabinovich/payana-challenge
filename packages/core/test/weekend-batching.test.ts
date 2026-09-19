@@ -136,3 +136,82 @@ describe('a check that could not be run costs nothing', () => {
     expect(scoredAsInapplicable.score).toBeGreaterThan(scoredAsFailure.score);
   });
 });
+
+describe('two batches paid in one transfer', () => {
+  it('reports the pair rather than filing both as unmatched', async () => {
+    // The real case: 2026-02-21 and 2026-02-23 total $29.414.683 and the
+    // $28.145.645,23 credited on the 24th is 4,31% below that. Neither batch
+    // can claim the credit alone, so neither does — but saying nothing is
+    // known about them would be false.
+    const { MergedSettlementRule } = await import('../src/rules/merged-settlement.rule.js');
+    const ruleSet = testRuleSet();
+
+    const batchOf = (iso: string, cents: number) =>
+      buildSettlementBatches({
+        calendar: CAL,
+        accountId: WOMPI_ACCOUNT,
+        movements: [charge(iso, cents)],
+      })[0]!;
+
+    const first = batchOf('2026-02-20', 2_593_689_600);
+    const second = batchOf('2026-02-23', 347_778_700);
+
+    const credit = aMovement({
+      accountId: WOMPI_ACCOUNT,
+      externalId: 'credit-merged',
+      valueDate: date('2026-02-24'),
+      type: 'TRANSFER_IN',
+      amount: Money.ofCents(2_814_564_523),
+      description: 'PAGO DE PROV WOMPI S.A.S.',
+      counterparty: 'WOMPI S.A.S.',
+    });
+
+    const candidates = new MergedSettlementRule().evaluate(second, [credit], {
+      calendar: CAL,
+      ruleSet,
+      channel: 'wompi',
+      policy: ruleSet.settlementPolicyFor('wompi'),
+      batches: [first, second],
+    });
+
+    expect(candidates).toHaveLength(1);
+    // It claims nothing: a candidate with no deposits can never win the
+    // assignment, so it cannot steal the credit from anyone.
+    expect(candidates[0]!.deposits).toEqual([]);
+
+    const merged = candidates[0]!.evidence.find((item) => item.code === 'SETTLEMENT_MERGED');
+    expect(merged).toBeDefined();
+    expect(merged!.detail).toContain('2026-02-20');
+    expect(merged!.detail).toContain('4,31%');
+  });
+
+  it('stays quiet when a batch settles on its own', async () => {
+    const { MergedSettlementRule } = await import('../src/rules/merged-settlement.rule.js');
+    const ruleSet = testRuleSet();
+
+    const only = buildSettlementBatches({
+      calendar: CAL,
+      accountId: WOMPI_ACCOUNT,
+      movements: [charge('2026-02-23', 347_778_700)],
+    })[0]!;
+
+    const credit = aMovement({
+      accountId: WOMPI_ACCOUNT,
+      externalId: 'credit-own',
+      valueDate: date('2026-02-24'),
+      type: 'TRANSFER_IN',
+      amount: Money.ofCents(332_785_000),
+      counterparty: 'WOMPI S.A.S.',
+    });
+
+    expect(
+      new MergedSettlementRule().evaluate(only, [credit], {
+        calendar: CAL,
+        ruleSet,
+        channel: 'wompi',
+        policy: ruleSet.settlementPolicyFor('wompi'),
+        batches: [only],
+      }),
+    ).toEqual([]);
+  });
+});

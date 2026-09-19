@@ -151,7 +151,13 @@ function unmatchedEvidence(candidates: readonly Candidate[]): Evidence[] {
       }),
     ];
   }
-  return candidates[0]!.evidence.filter((item) => !item.passed);
+  // A merged explanation is the most informative thing available about a
+  // batch nobody could claim, so it leads rather than being buried behind
+  // whatever the first candidate happened to fail.
+  const merged = candidates.flatMap((candidate) =>
+    candidate.evidence.filter((item) => item.code === 'SETTLEMENT_MERGED'),
+  );
+  return [...merged, ...candidates[0]!.evidence.filter((item) => !item.passed)];
 }
 
 function key(batchId: BatchId, candidate: Candidate): string {

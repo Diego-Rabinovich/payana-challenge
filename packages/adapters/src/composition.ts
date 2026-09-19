@@ -17,6 +17,7 @@ import {
   type RuleSetConfig,
   type SourceConnector,
   type SourceId,
+  MergedSettlementRule,
   ScheduledSettlementRule,
   SplitSettlementRule,
   UnknownLayoutError,
@@ -172,6 +173,7 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
         // the one the brief describes.
         new ScheduledSettlementRule(),
         new SplitSettlementRule(),
+        new MergedSettlementRule(),
       ]),
       reconcileErp: new ReconcileErp(erp, repositories.movements, accountMap, calendar),
     },

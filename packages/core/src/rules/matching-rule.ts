@@ -15,6 +15,14 @@ export interface MatchingContext {
   readonly channel: string;
   /** How this channel batches and how long it then takes to pay. */
   readonly policy: SettlementPolicy;
+  /**
+   * Every batch of the run.
+   *
+   * Only a rule that reasons about more than one batch needs it — a gateway
+   * that pays two of them in a single transfer, for instance. Rules that judge
+   * a batch on its own ignore it.
+   */
+  readonly batches?: readonly SettlementBatch[];
 }
 
 /**

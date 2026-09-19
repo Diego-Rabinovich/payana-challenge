@@ -33,6 +33,7 @@ export * from './rules/erp-assessment.js';
 export * from './rules/erp-entry-index.js';
 export * from './rules/erp-match-strategy.js';
 export * from './rules/matching-rule.js';
+export * from './rules/merged-settlement.rule.js';
 export * from './rules/scheduled-settlement.rule.js';
 export * from './rules/settlement-evidence.js';
 export * from './rules/split-settlement.rule.js';
