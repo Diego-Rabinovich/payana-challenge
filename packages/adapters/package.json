@@ -11,15 +11,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aa/contracts": "workspace:*",
     "@aa/core": "workspace:*",
-    "drizzle-orm": "^0.36.0",
+    "@js-temporal/polyfill": "^0.5.1",
     "pdfjs-dist": "^4.8.69",
-    "pg": "^8.13.0",
-    "undici": "^6.20.0",
-    "xlsx": "^0.18.5"
+    "pg": "^8.13.0"
   },
   "_comment": "The infrastructure ring. Having many dependencies is its job. Holds wompi/, bancolombia/, odoo/, persistence/, fs/, http/.",
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "vitest": "^2.1.8"
   }
 }

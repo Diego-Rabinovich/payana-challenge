@@ -1,12 +1,57 @@
 {
   "description": "Bank statement descriptor patterns, matched in order. This file says what the document SAYS — a movement type and a counterparty name. It deliberately says nothing about which channel a credit belongs to or whether it is in scope: those are reconciliation conclusions, and letting ingestion decide them would make the confidence score circular. See ADR-0002.",
 
+  "lesson": "Wompi changed its own descriptor mid-period, from 'PAGO DE PROV WOMPI S.A.S.' to 'PAGO DE TERC WOMPI S.A.S.' on 2026-04-14. A rule pinned to the first spelling silently dropped every settlement after that date. Rules now capture the counterparty from whatever follows the service prefix, so a new payer — or the same payer under a new prefix — is recognised rather than lost.",
+
   "rules": [
     {
-      "id": "wompi-settlement",
-      "match": { "startsWith": "PAGO DE PROV WOMPI" },
+      "id": "supplier-payment-in",
+      "match": { "startsWith": "PAGO DE PROV " },
       "type": "TRANSFER_IN",
-      "counterparty": "WOMPI S.A.S."
+      "counterpartyFrom": { "afterPrefix": "PAGO DE PROV " },
+      "note": "The supplier-payment service, seen from our side: the named party is paying us."
+    },
+    {
+      "id": "third-party-payment-in",
+      "match": { "startsWith": "PAGO DE TERC " },
+      "type": "TRANSFER_IN",
+      "counterpartyFrom": { "afterPrefix": "PAGO DE TERC " }
+    },
+    {
+      "id": "interbank-transfer-in",
+      "match": { "startsWith": "PAGO INTERBANC " },
+      "type": "TRANSFER_IN",
+      "counterpartyFrom": { "afterPrefix": "PAGO INTERBANC " }
+    },
+    {
+      "id": "supplier-payment-out",
+      "match": { "startsWith": "PAGO A PROV " },
+      "type": "TRANSFER_OUT",
+      "counterpartyFrom": { "afterPrefix": "PAGO A PROV " }
+    },
+    {
+      "id": "pse-payment-out",
+      "match": { "startsWith": "PAGO PSE " },
+      "type": "TRANSFER_OUT",
+      "counterpartyFrom": { "afterPrefix": "PAGO PSE " }
+    },
+    {
+      "id": "scheduled-payment-out",
+      "match": { "startsWith": "PAGO PROGRAMADO " },
+      "type": "TRANSFER_OUT",
+      "counterpartyFrom": { "afterPrefix": "PAGO PROGRAMADO " }
+    },
+    {
+      "id": "direct-payment-out",
+      "match": { "startsWith": "PAGO SV " },
+      "type": "TRANSFER_OUT",
+      "counterpartyFrom": { "afterPrefix": "PAGO SV " }
+    },
+    {
+      "id": "insurance-payment-out",
+      "match": { "startsWith": "PAGO SURAMERICANA" },
+      "type": "TRANSFER_OUT",
+      "counterparty": "SURAMERICANA DE SEGUROS"
     },
     {
       "id": "savings-interest",
@@ -15,29 +60,47 @@
       "counterparty": "BANCOLOMBIA"
     },
     {
-      "id": "account-fee-vat",
-      "match": { "startsWith": "IVA CUOTA MANEJO" },
-      "type": "TAX",
+      "id": "fee-reversal",
+      "match": { "startsWith": "REV" },
+      "type": "FEE",
       "counterparty": "BANCOLOMBIA",
-      "note": "Listed before the fee rule so the more specific prefix wins."
+      "note": "A reversed bank charge. Positive, and the sign comes from the VALOR column."
     },
     {
-      "id": "account-fee",
+      "id": "vat-on-bank-charge",
+      "match": { "startsWith": "IVA " },
+      "type": "TAX",
+      "counterparty": "BANCOLOMBIA",
+      "note": "Listed before the fee rules: 'IVA CUOTA MANEJO' must not fall to 'CUOTA MANEJO'."
+    },
+    {
+      "id": "vat-collected-on-charges",
+      "match": { "startsWith": "COBRO IVA" },
+      "type": "TAX",
+      "counterparty": "BANCOLOMBIA"
+    },
+    {
+      "id": "account-maintenance-fee",
       "match": { "startsWith": "CUOTA MANEJO" },
       "type": "FEE",
       "counterparty": "BANCOLOMBIA"
     },
     {
-      "id": "interbank-transfer-in",
-      "match": { "startsWith": "PAGO INTERBANC" },
-      "type": "TRANSFER_IN",
-      "counterpartyFrom": { "afterPrefix": "PAGO INTERBANC " },
-      "note": "The payer's name follows the prefix. Captured as a fact; whether it is a channel we track is for Phase 2 to decide."
+      "id": "bank-service-fee",
+      "match": { "startsWith": "SERVICIO " },
+      "type": "FEE",
+      "counterparty": "BANCOLOMBIA"
     },
     {
       "id": "statement-withholding",
-      "match": { "contains": "RETEFUENTE" },
+      "match": { "startsWith": "RETENCION EN LA FUENTE" },
       "type": "WITHHOLDING",
+      "counterparty": "BANCOLOMBIA"
+    },
+    {
+      "id": "prepaid-card-load",
+      "match": { "startsWith": "CARGUE TARJETA PREPAGO" },
+      "type": "TRANSFER_OUT",
       "counterparty": "BANCOLOMBIA"
     }
   ],

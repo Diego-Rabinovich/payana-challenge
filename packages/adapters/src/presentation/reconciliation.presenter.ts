@@ -1,0 +1,158 @@
+import type {
+  ErpReconciliationDto,
+  ErpReconciliationLineDto,
+  EvidenceDto,
+  ProposedEntryDto,
+  ReconciliationDto,
+  UnattributedCreditDto,
+} from '@aa/contracts';
+import type {
+  AccountMap,
+  ErpCorrection,
+  ErpReconciliationLine,
+  ErpReconciliationReport,
+  Evidence,
+  MatchResult,
+  UnattributedCredit,
+} from '@aa/core';
+import { isMappable, toJournalEntry } from '../odoo/journal-entry-builder.js';
+import { toMoneyDto, toOptionalMoneyDto } from './money.presenter.js';
+
+export function toEvidenceDto(evidence: Evidence): EvidenceDto {
+  return {
+    code: evidence.code,
+    dimension: evidence.dimension,
+    passed: evidence.passed,
+    ...(evidence.weight !== undefined ? { weight: evidence.weight } : {}),
+    ...(evidence.expected !== undefined ? { expected: evidence.expected } : {}),
+    ...(evidence.observed !== undefined ? { observed: evidence.observed } : {}),
+    ...(evidence.detail !== undefined ? { detail: evidence.detail } : {}),
+    ...(evidence.locator !== undefined ? { locator: evidence.locator } : {}),
+  };
+}
+
+export function toReconciliationDto(match: MatchResult): ReconciliationDto {
+  return {
+    id: match.id,
+    ...(match.runId ? { runId: match.runId } : {}),
+    rulesetVersion: match.rulesetVersion,
+    kind: match.kind,
+    status: match.status,
+    left: {
+      batchId: match.left.batchId,
+      batchDate: match.left.batchDate.toString(),
+      chargeIds: [...match.left.chargeIds],
+    },
+    right: match.right ? { movementIds: [...match.right.movementIds] } : null,
+    rule: { id: match.rule.id, version: match.rule.version },
+    amounts: {
+      gross: toMoneyDto(match.amounts.gross),
+      deductions: toMoneyDto(match.amounts.deductions),
+      expectedNet: toMoneyDto(match.amounts.expectedNet),
+      ...(match.amounts.observedNet ? { observedNet: toMoneyDto(match.amounts.observedNet) } : {}),
+      ...(match.amounts.delta ? { delta: toMoneyDto(match.amounts.delta) } : {}),
+      ...(match.amounts.impliedDeductionRate !== undefined
+        ? { impliedDeductionRate: match.amounts.impliedDeductionRate }
+        : {}),
+    },
+    window: {
+      from: match.window.from.toString(),
+      to: match.window.to.toString(),
+      basis: match.window.basis,
+    },
+    confidence: {
+      score: match.confidence.score,
+      band: match.confidence.band,
+      earned: match.confidence.earned,
+      attainable: match.confidence.attainable,
+      components: match.confidence.components.map(toEvidenceDto),
+    },
+    alternatives: match.alternatives.map((alternative) => ({
+      movementIds: [...alternative.movementIds],
+      score: alternative.score,
+      rejectedBecause: alternative.rejectedBecause,
+    })),
+  };
+}
+
+export function toUnattributedCreditDto(credit: UnattributedCredit): UnattributedCreditDto {
+  return {
+    movementId: credit.movementId,
+    valueDate: credit.valueDate.toString(),
+    amount: toMoneyDto(credit.amount),
+    ...(credit.counterparty ? { counterparty: credit.counterparty } : {}),
+    description: credit.description,
+    reason: credit.reason,
+  };
+}
+
+/**
+ * The correction as the accountant will read it: the Odoo entry it becomes.
+ *
+ * The translation belongs to the adapter layer, so this is the same function
+ * the gateway would use to write it. What the screen shows and what would be
+ * posted cannot drift apart.
+ */
+export function toProposedEntryDto(
+  correction: ErpCorrection,
+  accountMap: AccountMap,
+): ProposedEntryDto | undefined {
+  if (!isMappable(correction, accountMap)) return undefined;
+
+  const entry = toJournalEntry(correction, accountMap);
+  return {
+    ref: entry.ref,
+    journalId: entry.journalId,
+    date: entry.date,
+    reason: correction.reason,
+    missingConcepts: [...correction.missingConcepts],
+    lines: entry.lines.map((line) => ({
+      accountCode: line.accountCode,
+      accountName: line.accountName,
+      debit: toMoneyDto(line.debit),
+      credit: toMoneyDto(line.credit),
+      label: line.label,
+    })),
+  };
+}
+
+export function toErpLineDto(
+  line: ErpReconciliationLine,
+  accountMap: AccountMap,
+): ErpReconciliationLineDto {
+  const proposed = line.correction ? toProposedEntryDto(line.correction, accountMap) : undefined;
+
+  return {
+    status: line.status,
+    matchLevel: line.matchLevel,
+    ledgerMovementIds: [...line.ledgerMovementIds],
+    ...(line.erpEntryId ? { erpEntryId: line.erpEntryId } : {}),
+    ...(line.erpEntryName ? { erpEntryName: line.erpEntryName } : {}),
+    date: line.date.toString(),
+    ...(line.ledgerAmount ? { ledgerAmount: toMoneyDto(line.ledgerAmount) } : {}),
+    ...(line.erpAmount ? { erpAmount: toMoneyDto(line.erpAmount) } : {}),
+    ...(toOptionalMoneyDto(line.delta) ? { delta: toMoneyDto(line.delta!) } : {}),
+    evidence: line.evidence.map(toEvidenceDto),
+    ...(proposed ? { proposedEntry: proposed } : {}),
+  };
+}
+
+export function toErpReconciliationDto(
+  report: ErpReconciliationReport,
+  accountMap: AccountMap,
+): ErpReconciliationDto {
+  return {
+    ...(report.runId ? { runId: report.runId } : {}),
+    journalId: report.journalId,
+    journalName: report.journalName,
+    lines: report.lines.map((line) => toErpLineDto(line, accountMap)),
+    totals: {
+      ledgerGroups: report.totals.ledgerGroups,
+      erpEntries: report.totals.erpEntries,
+      byStatus: { ...report.totals.byStatus },
+      ledgerTotal: toMoneyDto(report.totals.ledgerTotal),
+      erpTotal: toMoneyDto(report.totals.erpTotal),
+      unexplained: toMoneyDto(report.totals.unexplained),
+    },
+  };
+}
