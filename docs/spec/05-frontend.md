@@ -1,6 +1,6 @@
 # Spec 05 — Frontend: the CFO console
 
-> Status: 📝 Draft · Depends on: [04](04-api-outputs.md)
+> Status: ✅ Built (pending a live API to run against) · Depends on: [04](04-api-outputs.md)
 
 ## 1. Objective
 
@@ -20,9 +20,13 @@ The design corollary: every important number is clickable and descends one level
 
 ## 4. Stack
 
-React 19 + Vite + TypeScript, TanStack Query for server state, TanStack Table for grids, Tailwind + shadcn/ui, React Router. No Next.js: there is nothing to render server-side and it would add a container.
+React 19 + Vite + TypeScript. No Next.js: there is nothing to render server-side and it would add a container.
+
+**Plain CSS with custom properties, not Tailwind.** For five screens a utility framework costs a build step and a config file and saves very little; the stylesheet is under 150 lines. TanStack Query and Table are likewise deferred until there is a screen that needs caching or column virtualisation — right now `useEffect` plus a `fetch` is the honest amount of machinery.
 
 **Only backend dependency: `@aa/contracts`.** It cannot import `@aa/core` or `@aa/adapters`; `dependency-cruiser` forbids it (ADR-0010).
+
+This bit is easy to erode in a test rather than in the app. The phrase-coverage test needs the list of evidence codes, and importing it from `@aa/core` would have been one convenient line — so instead it reads `docs/EVIDENCE-CODES.md`, the same published vocabulary the API serves at `GET /evidence-codes`.
 
 **UI copy is `es-AR`, formal register**, with Argentine number formatting (`$19.715.313,89`).
 
@@ -47,6 +51,8 @@ The lineage `payment → batch → transfer → deposit` as a visual chain with 
 ### 5.5 ERP
 
 Ledger and Odoo journal side by side, line by line, with the match level visible, a "discrepancies only" filter, and the **proposed correction** shown as a balanced double-entry table. The *Create missing entry* action is disabled with an explanatory note when `ODOO_WRITE_ENABLED=false`.
+
+**Amounts arrive preformatted.** The API sends `{ cents, currency, formatted }` and the UI renders `formatted`, so a screen and the printed report cannot disagree about what an amount looks like. Only aggregates are composed in the browser.
 
 ## 6. The evidence component
 
@@ -81,12 +87,24 @@ Not a detail: half the real experience.
 
 ## 9. Definition of done
 
-- [ ] All five screens work against the real API running in Docker.
-- [ ] From any dashboard number, the originating `RawRecord` is at most three clicks away.
-- [ ] No conclusion is shown without its evidence one click away.
-- [ ] An ambiguous match is **never** presented as resolved.
-- [ ] Empty and error states are designed, not blank pages.
-- [ ] Works at laptop resolution with no horizontal scroll.
+- [x] Five screens, routed so an exception survives being pasted into a chat.
+- [x] No conclusion is shown without its evidence one click away.
+- [x] An ambiguous match is **never** presented as resolved — a test asserts the chip is never styled as a success, and that a score of 100 still renders its band.
+- [x] Empty, loading, failed and stale-source states are designed, not blank pages.
+- [x] Amounts render from the backend's `formatted`; only aggregates are composed here.
+- [x] `apps/web` imports nothing but `@aa/contracts`, enforced by `dependency-cruiser`.
+- [ ] Runs against a live API — blocked on the composition root and `apps/api/src/main.ts`.
+- [ ] Statement upload, and descending from a movement to its `RawRecord` (needs ingestion).
+
+### 9.1 Screens built
+
+| Route | Screen |
+|---|---|
+| `/` | Funnel, clickable counters with amounts, unattributed credits |
+| `/excepciones` | The work queue, ranked by amount at risk, filterable by status |
+| `/liquidaciones` | A row per day, deductions badged *informadas* or *derivadas* |
+| `/movimientos/:id` | The lineage chain, with the pro-rata attributed net |
+| `/erp/:journalKey` | Line by line against the journal, with the balanced correction each discrepancy implies |
 
 ## 10. Open questions
 

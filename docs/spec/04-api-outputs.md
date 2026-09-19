@@ -1,6 +1,6 @@
 # Spec 04 — API and outputs (the CFO and the AI)
 
-> Status: 📝 Draft · Depends on: [02](02-phase2-flow.md), [03](03-phase3-erp.md) · Enables: [05](05-frontend.md), [06](06-ai-user.md)
+> Status: 🔨 Core implemented · Depends on: [02](02-phase2-flow.md), [03](03-phase3-erp.md) · Enables: [05](05-frontend.md), [06](06-ai-user.md)
 
 ## 1. Objective
 
@@ -35,19 +35,26 @@ The explicit domain → DTO mapping. This is where the internal model is protect
 | Method and route | Returns |
 |---|---|
 | `GET /health` | Version, `rulesetVersion`, source status |
-| `GET /runs` · `GET /runs/{runId}` | Runs; summary with totals and counts by status |
-| `POST /runs` | Triggers a run (ingestion plus reconciliation) |
-| `GET /ledgers` · `GET /ledgers/{accountId}/movements` | Accounts and cursor-paginated movements |
-| `GET /movements/{id}` · `GET /movements/{id}/trace` | Movement and its full lineage |
-| `GET /batches` · `GET /batches/{id}` | Settlement batches |
-| `GET /reconciliations?status=ambiguous` | Channel-to-bank matches, filterable |
-| `GET /reconciliations/{id}` | Detail with evidence and alternatives |
-| `GET /erp-reconciliations?journal=48&status=missing_in_erp` | ERP reconciliation, with proposed entries |
-| `POST /erp/post-missing` | Entry plan; writes only under the Phase 3 guards |
-| `GET /reports/{runId}?format=md\|json\|ndjson` | Artifacts |
-| `GET /schema` | JSON Schema for every DTO |
+| `GET /runs` · `POST /runs` · `GET /runs/{runId}` | Runs. `POST` replies `201` with `Location` |
+| `GET /runs/{runId}/report?format=md\|json\|ndjson` | The run artifact |
+| `GET /accounts` · `GET /accounts/{accountId}/movements` | Accounts and cursor-paginated movements |
+| `GET /movements/{movementId}` · `GET /movements/{movementId}/lineage` | Movement and where its money went |
+| `GET /settlement-batches` · `GET /settlement-batches/{batchId}` | Batches |
+| `GET /reconciliations?status=ambiguous` | Channel-to-bank results, filterable |
+| `GET /reconciliations/{matchId}` | Detail with evidence and alternatives |
+| `GET /unattributed-credits` | Credits no batch claimed |
+| `GET /erp-reconciliations/{journalKey}` | ERP reconciliation, each line with its proposed correction |
+| `POST /erp-journal-entries` | Creates the missing entries. Guarded by Phase 3's write policy |
 | `GET /evidence-codes` | The closed vocabulary with descriptions |
-| `POST /sources/{id}/upload` | Monthly PDF upload (multipart) |
+| `POST /sources/{sourceId}/documents` | Uploads a monthly statement (multipart) |
+
+**Every path names a resource, never an action.** A movement's provenance is
+`/movements/{id}/lineage`, a sub-resource — not `/trace`. Creating the missing
+entries posts to the `erp-journal-entries` collection rather than to a
+`post-missing` endpoint. And there is no `dryRun` flag anywhere: the preview is
+already a different resource, since `GET /erp-reconciliations/{journalKey}`
+returns every `proposedEntry` before anything is written. A test asserts that no
+published path matches a verb.
 
 ### 4.4 Cross-cutting API rules
 

@@ -10,7 +10,10 @@ build/
 !.env.example
 
 # Generated output
+# report.md and report.json are deliverable 9 and are committed on purpose.
 data/out/*
+!data/out/report.md
+!data/out/report.json
 !data/out/.gitkeep
 
 # Raw, unscrubbed inputs. See ADR-0012.

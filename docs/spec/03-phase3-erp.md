@@ -1,6 +1,6 @@
 # Spec 03 — Phase 3: Reconciliation against the ERP
 
-> Status: 📝 Draft · Depends on: [01](01-phase1-ingestion.md) · Enables: [04](04-api-outputs.md)
+> Status: 🔨 Core implemented · Depends on: [01](01-phase1-ingestion.md) · Enables: [04](04-api-outputs.md)
 
 ## 1. Objective
 
@@ -19,24 +19,57 @@ Answer the accounting question, distinct from Phase 2's: **does the system of re
 | **Input** | Phase 1 canonical ledgers plus Odoo entries from journals 48 and 49 |
 | **Output** | One `ErpReconciliationLine` per element on both sides, with status, match level, evidence and a proposed correction |
 
-## 4. What we know about the target journals
+## 4. The target journals, read
+
+Verified read-only against `payana-prod` on 2026-09-19.
 
 | | Journal 48 | Journal 49 |
 |---|---|---|
-| Name | Wompi Tarjetas | Bancolombia |
+| Name / code | Wompi Tarjetas · `WMP` | Bancolombia · `BNK8` |
 | Type | Bank | Bank |
-| Bank account | `1110001 Wompi Tarjetas` | (to read) |
-| Suspense account | `1010001 Wompi` | (to read) |
-| Bank account number | `19300002179` | `00000000000` |
-| Existing entries | 40, named `WMP/2026/00001`–`00040` | (to read) |
-| Entry naming | Carries the Wompi reference: `WMP/2026/00001 (TKFGJOKOQFHWVIGU71QQQ)` | (to read) |
-| Lines per entry | 2 | (to read) |
+| Default account | `1110001 Wompi Tarjetas` | `111001 Bank` |
+| Suspense account | `1010001 Wompi` | `111002 Bank Suspense Account` |
+| Entries | 40, `2026-01-03` → `2026-04-24` | 12, `2026-01-02` → `2026-06-11` |
+| Reference | `ref` holds the gateway reference, uppercase | `ref` is the label `Acreditación Wompi` |
+| Lines per entry | **2, every one of them** | 2 |
 
-Two consequences:
+**The reference lives in `ref`,** not in the entry name — uppercase in Odoo, lowercase in Wompi, so matching is case-insensitive.
 
-**The suspense account is the bridge.** Money leaving the Wompi balance (`1110001`) and arriving at Bancolombia (`111001`) transits `1010001 Wompi`. There is no double-counting problem — there is a transit account.
+**Every entry in journal 48 is incomplete.** Across all forty, only two account codes appear at all:
 
-**Two lines per entry means the breakdown is probably absent.** A complete entry needs five lines (bank, fee, VAT, withholding, sales). With two, the entry most likely records the gross amount against a single counterpart — leaving the bank overstated and fee, VAT credit and withholding unrecorded. This is a hypothesis drawn from a screenshot; it is **settled by reading the lines**, not by asking. Either way the design is identical: the parser reads whatever lines exist and maps them by account code.
+```
+Debit   1110001 Wompi Tarjetas   = GROSS
+Credit  420500 Other sales       = GROSS
+```
+
+No `530505` fee, no `240810` VAT, no `236500` withholding — anywhere. The gross is booked as if it had all landed, so the gateway balance is overstated by every deduction ever charged.
+
+**Journal 49 is the bridge, and it is barely used.** Its twelve entries debit `111001 Bank` and credit `1110001 Wompi Tarjetas`: the settlement moving money out of the gateway balance into the bank. Amounts tie exactly to the statement — `19,715,313.89` on 2026-01-02 is the first Wompi credit of the year.
+
+**What already reconciles, measured.** Every one of the forty entries resolves to a real approved transaction by reference, and every one carries the correct gross:
+
+| | |
+|---|---:|
+| Approved Wompi transactions, Jan–Apr 2026 | 115 |
+| Entries in journal 48 | 40 |
+| **Entries whose `ref` resolves to an approved transaction** | **40 / 40** |
+| **Entries whose gross matches that transaction to the cent** | **40 / 40** |
+| Approved transactions with no entry at all | 75 |
+
+So the finding is not "the ERP is wrong". It is precise: *what was recorded, was recorded correctly; it is missing the deduction lines, and three quarters of the transactions were never recorded at all.* Reference matching resolves the first forty with no ambiguity whatsoever — level 1 of the cascade does the work, exactly as designed.
+
+The bank side is the same shape: the statements contain 58 Wompi credits over the four months, and journal 49 holds 12.
+
+**The number that summarises the gap:**
+
+```
+journal 48 → debits to 1110001    $ 92.933.959,00
+journal 49 → credits to 1110001   $ 50.832.937,61
+                                  ───────────────
+balance stranded on 1110001       $ 42.101.021,39
+```
+
+That account should drain towards zero as settlements arrive. It does not, for two compounding reasons: deductions are never booked, and only twelve of the settlements were recorded at all. That figure is what Phase 3 has to explain, line by line.
 
 ## 5. Components to build
 

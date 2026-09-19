@@ -37,7 +37,7 @@ Turn heterogeneous sources — a bank PDF, a gateway API, a webhook — into one
 
 ### 4.2 The central modelling decision
 
-Each approved Wompi transaction produces **four movements**, not one. Wompi exposes deductions explicitly per transaction, using exactly the four concepts that map onto the brief's chart of accounts:
+Each approved Wompi transaction produces **four movements**, not one, using exactly the four concepts that map onto the brief's chart of accounts:
 
 | Wompi concept | Canonical type | Sign | Odoo account |
 |---|---|---|---|
@@ -46,7 +46,9 @@ Each approved Wompi transaction produces **four movements**, not one. Wompi expo
 | IVA de la comisión | `TAX` | − | 240810 IVA Descontable |
 | Retención en la fuente | `WITHHOLDING` | − | 236500 Retención En La Fuente |
 
-Decomposing at ingestion — rather than later — makes Phase 3 a direct mapping and spares Phase 2 from inferring anything. All four share the `externalId` (the transaction reference), so they can always be regrouped.
+Decomposing at ingestion — rather than later — makes Phase 3 a direct mapping. All four share the `externalId` (the transaction reference), so they can always be regrouped.
+
+**Where the deduction amounts come from is now an open problem.** Verified read-only against the live API on 2026-09-19: the transaction payload carries `amount_in_cents` and nothing else. `id`, `created_at`, `finalized_at`, `reference`, `customer_email`, `currency`, `payment_method_type`, `payment_method`, `status`, `status_message`, `shipping_address`, `redirect_url`, `payment_source_id`, `payment_link_id`, `customer_data`, `billing_data`, `origin` — no fee, no VAT, no withholding. The breakdown the merchant panel shows under *Entradas contables* is not exposed, and `/payouts`, `/settlements`, `/transfers` and `/balance` all return 404. See Q1.7.
 
 **The invariant this enables:** the Wompi ledger balance returns to zero after each settlement (charges in, deductions and payout out). If it does not, a movement is missing.
 
@@ -73,7 +75,7 @@ The pipeline is written **once**. Every new source is adapters, not changes here
 | Adapter | Transport | Format | Notes |
 |---|---|---|---|
 | `BancolombiaStatementParser` | local file | PDF | See §4.6 |
-| `WompiTransactionsApiConnector` | HTTP | JSON | `GET /v1/transactions` with `Authorization: Bearer prv_prod_…` |
+| `WompiTransactionsApiConnector` | HTTP | JSON | `GET /v1/transactions?from_date&until_date&page&page_size` (max 200), plus `?reference=` for a single lookup. Undocumented but verified working |
 | `WompiTransactionParser` | — | JSON | One approved transaction → four movements |
 | `WompiReportParser` | local file | CSV/XLSX | Panel export. Alternative path if the API falls short |
 | `WompiEventParser` | webhook | JSON | `transaction.updated` plus SHA-256 checksum validation |
@@ -183,6 +185,7 @@ Expected output: a per-source summary with movements by type, exclusions with re
 - **Q1.1 — Which statement months actually exist in Notion?** The sample runs 31 Dec 2025 to 31 Jan 2026. Assuming twelve for 2026 until confirmed.
 - **Q1.2 — Do all PDFs share one layout?** The design supports several via `canParse()`, but it has to be verified across all twelve.
 - **Q1.3 — Does the panel or the SFTP expose the settlement report (the transfers to the bank)?** If so, `PAYOUT` is ingested and the zero-balance invariant applies. If not, Phase 2 derives it and flags it as derived.
+- **Q1.7 — Where do the deduction amounts come from?** The API gives gross only. Three options: the panel export, the SFTP settlement report, or deriving the total from the gap between a day's gross and the bank credit and decomposing it by the observed rates. The third needs no new access and is verifiable — the decomposition has to reproduce the gap to the cent — but it changes Phase 2's evidence from *reported* to *derived*.
 - **Q1.4 — Does the commission have a fixed component?** In the observed transaction, `7,862.40 / 317,549 = 2.476%`, an odd figure for a flat rate. It may be `X% + fixed`, or vary by card network. Determined by regression over ~50 transactions on day one; the result feeds Phase 2's `IMPLIED_FEE_IN_BAND` band.
 - **Q1.5 — Are there refunds, voids or chargebacks in the period?** They would flip signs inside a batch.
 - **Q1.6 — What is the data range?** The panel filter showed March–September 2026 and the sample statement is January. The challenge period needs pinning down.

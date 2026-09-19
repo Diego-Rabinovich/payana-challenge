@@ -43,9 +43,9 @@ Why it matters: in the sample statement the first Wompi deposit is **Friday 2 Ja
 
 ### 4.3 `BuildSettlementBatches` (use case)
 
-Groups Wompi `CHARGE` movements by cutoff date and attaches each transaction's deductions. Because Wompi exposes fee, VAT and withholding per transaction, deductions are **explicit** and `expectedNet` is a sum, not an inference.
+Groups Wompi `CHARGE` movements by cutoff date. `expectedNet` is the gross less the derived deductions.
 
-The **implied** deduction path (derived from the difference against the deposit) is implemented as a fallback and flagged `basis: IMPLIED` so the evidence says so.
+**Deductions are derived, not reported.** The gateway's API exposes only the gross, so the three concepts are recovered from the gap against the bank credit using the two statutory rates — verified to recover a known breakdown to the cent. They are flagged `basis: IMPLIED` and carry `DEDUCTIONS_DERIVED`, so a reader can always tell a figure the source stated from one the system computed. See ADR-0013.
 
 ### 4.4 Rules engine
 
@@ -131,7 +131,7 @@ Every bank credit that ended up unassigned appears in a separate list with its c
 | `RULESET_PATH` | env | Which ruleset to use |
 | `settlementWindow.{from,to}` | ruleset | Business-day window, default `[D+1, D+3]` |
 | `tolerances.roundingCents` | ruleset | Default 10,000 cents ($100) |
-| `tolerances.impliedFeeRateBand` | ruleset | Default `[0.02, 0.05]`. Calibrated via Q1.4 |
+| `tolerances.impliedFeeRateBand` | ruleset | `[0.04, 0.05]`, calibrated on four months of statements: the total deduction clusters at 4.30–4.55% |
 | `weights.*`, `bands.*`, `ambiguityDelta` | ruleset | The rubric |
 | `subsetSum.{maxSubsetSize,maxSolutions,toleranceCents}` | ruleset | Fallback caps |
 | `TZ=America/Bogota` | env | Business date |
