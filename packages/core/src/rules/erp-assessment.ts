@@ -37,7 +37,14 @@ export function assessMatch(
   const ledgerAmount = ledgerAmountOf(group);
   const erpCents = context.index.amountOf(entry);
   const erpAmount = erpCents === undefined ? undefined : Money.ofCents(erpCents);
-  const delta = erpAmount ? erpAmount.minus(ledgerAmount) : undefined;
+
+  // Un grupo agregado es *parte* del asiento, no su equivalente: la
+  // asignación ya verificó que los grupos suman el asiento exacto, así que
+  // restarle a este grupo el total daría una diferencia que no existe. Era
+  // lo que hacía aparecer "monto distinto · delta $538.305,76" sobre una
+  // agregación perfectamente correcta.
+  const delta =
+    match.level === 'AGGREGATED' || !erpAmount ? undefined : erpAmount.minus(ledgerAmount);
 
   const checks: Evidence[] = [match.evidence];
   const missingConcepts = findMissingConcepts(group, entry, context);

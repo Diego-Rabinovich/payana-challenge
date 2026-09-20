@@ -17,6 +17,7 @@ import type { ErpGateway } from '../ports/erp-gateway.js';
 import type { MovementRepository } from '../ports/repositories.js';
 import type { DateRange } from '../ports/source-connector.js';
 import { ErpEntryIndex } from '../rules/erp-entry-index.js';
+import { type ErpAssignment, assignErpMatches } from '../rules/erp-assignment.js';
 import { assessMatch } from '../rules/erp-assessment.js';
 import {
   type ErpMatchContext,
@@ -80,9 +81,15 @@ export class ReconcileErp {
     };
 
     const groups = groupForComparison(ledgerMovements);
+    // Decided over the whole journal at once, not one group at a time: the
+    // old cascade let whichever group came first claim an entry, which on a
+    // day with several movements handed it to the wrong one. See
+    // erp-assignment.ts.
+    const assignment = assignErpMatches(groups, context);
+
     const lines: ErpReconciliationLine[] = [
       ...this.duplicateLines(groups, index),
-      ...groups.map((group) => this.reconcileGroup(group, context, input)),
+      ...groups.map((group) => this.reconcileGroup(group, assignment, context, input)),
       ...this.orphanEntries(index),
     ];
 
@@ -113,6 +120,7 @@ export class ReconcileErp {
           status: 'DUPLICATE_IN_ERP' as ErpLineStatus,
           matchLevel: 'REF' as const,
           ledgerMovementIds: group.movements.map((movement) => movement.id),
+          ...describe(group),
           date: group.date,
           ledgerAmount: ledgerAmountOf(group),
           evidence: [
@@ -129,14 +137,12 @@ export class ReconcileErp {
 
   private reconcileGroup(
     group: LedgerGroup,
+    assignment: ErpAssignment,
     context: ErpMatchContext,
     input: ReconcileErpInput,
   ): ErpReconciliationLine {
-    for (const strategy of this.strategies) {
-      const match = strategy.find(group, context);
-      if (!match) continue;
-
-      context.index.claim(match.entry);
+    const match = assignment.get(group.key);
+    if (match) {
       const assessment = assessMatch(group, match, context);
 
       return {
@@ -145,6 +151,8 @@ export class ReconcileErp {
         ledgerMovementIds: group.movements.map((movement) => movement.id),
         erpEntryId: match.entry.id,
         erpEntryName: match.entry.name,
+        erpEntryState: match.entry.state,
+        ...describe(group),
         date: group.date,
         ledgerAmount: assessment.ledgerAmount,
         ...(assessment.erpAmount ? { erpAmount: assessment.erpAmount } : {}),
@@ -158,6 +166,7 @@ export class ReconcileErp {
       status: 'MISSING_IN_ERP',
       matchLevel: 'NONE',
       ledgerMovementIds: group.movements.map((movement) => movement.id),
+      ...describe(group),
       date: group.date,
       ledgerAmount: ledgerAmountOf(group),
       evidence: [
@@ -220,6 +229,7 @@ export class ReconcileErp {
       ledgerMovementIds: [],
       erpEntryId: entry.id,
       erpEntryName: entry.name,
+      erpEntryState: entry.state,
       date: entry.date,
       ...(index.amountOf(entry) !== undefined
         ? { erpAmount: Money.ofCents(index.amountOf(entry)!) }
@@ -232,6 +242,17 @@ export class ReconcileErp {
       ],
     }));
   }
+}
+
+/** Lo que el documento dice de este grupo, para que la fila se pueda leer. */
+function describe(group: LedgerGroup): { descriptor?: string; counterparty?: string } {
+  const first = group.movements[0];
+  if (!first) return {};
+
+  return {
+    descriptor: first.description,
+    ...(first.counterparty ? { counterparty: first.counterparty } : {}),
+  };
 }
 
 function summarise(

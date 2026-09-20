@@ -50,6 +50,7 @@ export function erpEntry(input: {
   lines: ErpLine[];
   ref?: string;
   journalId?: number;
+  state?: ErpEntry['state'];
 }): ErpEntry {
   return {
     id: input.id,
@@ -57,7 +58,7 @@ export function erpEntry(input: {
     name: input.name,
     ...(input.ref ? { ref: input.ref } : {}),
     date: Temporal.PlainDate.from(input.date),
-    state: 'posted',
+    state: input.state ?? 'posted',
     lines: input.lines,
   };
 }

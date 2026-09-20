@@ -31,6 +31,7 @@ export * from './ports/source-connector.js';
 
 export * from './rules/assignment.js';
 export * from './rules/erp-assessment.js';
+export * from './rules/erp-assignment.js';
 export * from './rules/erp-entry-index.js';
 export * from './rules/erp-match-strategy.js';
 export * from './rules/matching-rule.js';

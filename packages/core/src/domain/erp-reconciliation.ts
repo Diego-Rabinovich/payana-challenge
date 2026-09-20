@@ -4,6 +4,7 @@ import type { MovementId, RunId } from './ids.js';
 import type { Money } from './money.js';
 import type { Movement, MovementType } from './movement.js';
 import type { ErpCorrection } from './erp-correction.js';
+import type { ErpEntryState } from './erp-entry.js';
 
 /**
  * Comparing a ledger against its formal book, line by line.
@@ -50,6 +51,24 @@ export interface ErpReconciliationLine {
   readonly ledgerMovementIds: readonly MovementId[];
   readonly erpEntryId?: string;
   readonly erpEntryName?: string;
+  /**
+   * En qué estado está el asiento contra el que coincidió.
+   *
+   * Un borrador no está en los libros todavía: puede cambiar, puede borrarse,
+   * y no suma en ningún balance. Que la línea diga MATCHED contra un borrador
+   * es cierto y engañoso al mismo tiempo, así que el estado viaja con ella en
+   * lugar de quedarse en el adapter que leyó Odoo.
+   */
+  readonly erpEntryState?: ErpEntryState;
+  /**
+   * De dónde salió la plata, tal como lo dice el documento.
+   *
+   * Sin esto la tabla es una lista de fechas y montos: nadie puede ver de un
+   * vistazo que una fila es de Wompi, otra de intereses del banco y otra de
+   * un pagador que no tiene nada que ver con esta conciliación.
+   */
+  readonly descriptor?: string;
+  readonly counterparty?: string;
   readonly date: Temporal.PlainDate;
   readonly ledgerAmount?: Money;
   readonly erpAmount?: Money;
