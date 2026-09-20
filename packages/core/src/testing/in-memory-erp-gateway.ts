@@ -3,7 +3,7 @@ import type { ErpEntry } from '../domain/erp-entry.js';
 import { externalReferenceOf } from '../domain/erp-entry.js';
 import type { AccountMap } from '../domain/account-map.js';
 import type { ErpCorrection } from '../domain/erp-correction.js';
-import type { ErpGateway } from '../ports/erp-gateway.js';
+import type { ErpGateway, OwnEntry } from '../ports/erp-gateway.js';
 import type { DateRange } from '../ports/source-connector.js';
 
 /**
@@ -15,6 +15,7 @@ export class InMemoryErpGateway implements ErpGateway {
   private readonly entries: ErpEntry[];
   private sequence = 0;
   readonly created: ErpCorrection[] = [];
+  readonly deleted: string[] = [];
 
   constructor(
     entries: readonly ErpEntry[] = [],
@@ -65,6 +66,30 @@ export class InMemoryErpGateway implements ErpGateway {
     });
     this.created.push(correction);
     return id;
+  }
+
+  async listOwnEntries(journalId: number): Promise<readonly OwnEntry[]> {
+    return this.entries
+      .filter((entry) => entry.journalId === journalId && entry.ref?.startsWith('mov:'))
+      .map((entry) => ({
+        ref: entry.ref!,
+        id: entry.id,
+        name: entry.name,
+        state: entry.state,
+        date: entry.date,
+      }));
+  }
+
+  async deleteDraftEntry(ref: string): Promise<boolean> {
+    const entry = await this.findByRef(ref);
+    if (!entry) return false;
+    // Same contract as the real one: a posted entry is nobody's to remove.
+    if (entry.state !== 'draft') return false;
+
+    const index = this.entries.findIndex((candidate) => candidate.id === entry.id);
+    this.entries.splice(index, 1);
+    this.deleted.push(ref);
+    return true;
   }
 }
 

@@ -64,4 +64,27 @@ export class AccountMap {
   isMapped(type: MovementType): boolean {
     return this.accountFor(type) !== undefined;
   }
+
+  /**
+   * The books this system may touch, and the accounts inside them.
+   *
+   * Exposed so the Odoo adapter can derive its write allowlist from the chart
+   * rather than from a second list somebody maintains in parallel. What was
+   * handed to us is the entire blast radius.
+   */
+  get journalIds(): readonly number[] {
+    return Object.values(this.config.journals).map((journal) => journal.id);
+  }
+
+  get accountCodes(): readonly string[] {
+    const mapped = Object.values(this.config.accounts)
+      .filter((account): account is AccountRef => account !== undefined)
+      .map((account) => account.code);
+    const journals = Object.values(this.config.journals).flatMap((journal) =>
+      [journal.mainAccount, journal.suspenseAccount].filter(
+        (code): code is string => code !== undefined,
+      ),
+    );
+    return [...new Set([...mapped, ...journals])];
+  }
 }

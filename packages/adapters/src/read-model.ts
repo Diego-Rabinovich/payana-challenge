@@ -169,6 +169,30 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       },
     },
 
+    corrections: {
+      create: async ({ journalKey, ref, runId }) => {
+        const stored = runId
+          ? await repositories.reports.load<unknown>(asRunId(runId), 'erp', journalKey)
+          : await repositories.reports.latest<unknown>('erp', journalKey);
+        if (!stored) throw new Error(`No hay conciliación del diario ${journalKey}`);
+
+        // La corrección se toma del reporte, no de lo que mandó el cliente.
+        const report = reviveErpReport(stored);
+        const line = report.lines.find((candidate) => candidate.correction?.ref === ref);
+        if (!line?.correction) throw new Error(`No hay una corrección con referencia ${ref}`);
+
+        return deps.erp.createDraftEntry(line.correction);
+      },
+
+      remove: async (ref) => deps.erp.deleteDraftEntry(ref),
+
+      written: async (journalKey) => {
+        const journal = accountMap.journal(journalKey);
+        if (!journal) throw new Error(`No hay un diario ${journalKey} en el plan de cuentas`);
+        return deps.erp.listOwnEntries(journal.id);
+      },
+    },
+
     channels: {
       list: async (runId) => {
         const report = await flowOf(runId);

@@ -127,6 +127,21 @@ export const ProposedEntryDto = z.object({
   ),
 });
 
+/**
+ * Un asiento que este sistema dejó escrito, tal como está hoy en el ERP.
+ *
+ * La consola lo usa para marcar en la tabla lo que ya se creó. Se consulta al
+ * ERP en cada carga en vez de guardarlo de nuestro lado: una marca que
+ * sobrevive a que alguien borre el asiento en Odoo miente.
+ */
+export const WrittenEntryDto = z.object({
+  ref: z.string().describe('mov:<movementId>, la clave de idempotencia'),
+  entryId: z.string(),
+  name: z.string(),
+  state: z.enum(['draft', 'posted', 'cancel']),
+  date: IsoDate,
+});
+
 /** Phase 3 on the wire, one line per element of either side. */
 export const ErpReconciliationLineDto = z.object({
   status: z.enum([
@@ -144,6 +159,12 @@ export const ErpReconciliationLineDto = z.object({
   ledgerMovementIds: z.array(z.string()),
   erpEntryId: z.string().optional(),
   erpEntryName: z.string().optional(),
+  erpEntryState: z
+    .enum(['draft', 'posted', 'cancel'])
+    .optional()
+    .describe('Un borrador coincide pero todavia no esta en los libros'),
+  descriptor: z.string().optional(),
+  counterparty: z.string().optional(),
   date: IsoDate,
   ledgerAmount: MoneyDto.optional(),
   erpAmount: MoneyDto.optional(),
@@ -171,6 +192,7 @@ export type ReconciliationDto = z.infer<typeof ReconciliationDto>;
 export type ErpReconciliationLineDto = z.infer<typeof ErpReconciliationLineDto>;
 export type ErpReconciliationDto = z.infer<typeof ErpReconciliationDto>;
 export type ProposedEntryDto = z.infer<typeof ProposedEntryDto>;
+export type WrittenEntryDto = z.infer<typeof WrittenEntryDto>;
 export type UnattributedCreditDto = z.infer<typeof UnattributedCreditDto>;
 export type ReconciliationSummaryDto = z.infer<typeof ReconciliationSummaryDto>;
 export type OffsetPageDto = z.infer<typeof OffsetPageDto>;

@@ -72,7 +72,14 @@ export async function buildApp(
       await api.register(runRoutes(deps));
       await api.register(ledgerRoutes(deps.ledger));
       await api.register(
-        reconciliationRoutes(deps.flow, deps.erp, deps.ledger, deps.accountMap, deps.ruleSet),
+        reconciliationRoutes(
+          deps.flow,
+          deps.erp,
+          deps.ledger,
+          deps.corrections,
+          deps.accountMap,
+          deps.ruleSet,
+        ),
       );
     },
     { prefix: API_PREFIX },

@@ -46,6 +46,10 @@ export function toEvidenceDto(evidence: Evidence): EvidenceDto {
  * teaching the value object about locales. See ADR-0008.
  */
 function humanise(text: string): string {
+  // Cinturón: un campo de evidencia debería ser siempre una cadena, y cuando
+  // dejó de serlo se llevó puesta la pantalla entera en vez de una línea.
+  if (typeof text !== 'string') return String(text);
+
   return text.replace(/COP\s(-?\d+)/g, (_match, cents: string) =>
     formatMoney(Money.ofCents(Number(cents))),
   );
@@ -205,6 +209,9 @@ export function toErpLineDto(
     ledgerMovementIds: [...line.ledgerMovementIds],
     ...(line.erpEntryId ? { erpEntryId: line.erpEntryId } : {}),
     ...(line.erpEntryName ? { erpEntryName: line.erpEntryName } : {}),
+    ...(line.erpEntryState ? { erpEntryState: line.erpEntryState } : {}),
+    ...(line.descriptor ? { descriptor: line.descriptor } : {}),
+    ...(line.counterparty ? { counterparty: line.counterparty } : {}),
     date: line.date.toString(),
     ...(line.ledgerAmount ? { ledgerAmount: toMoneyDto(line.ledgerAmount) } : {}),
     ...(line.erpAmount ? { erpAmount: toMoneyDto(line.erpAmount) } : {}),

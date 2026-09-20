@@ -14,6 +14,7 @@ import type {
   SettlementBatchDto,
   StatementFileDto,
   UnattributedCreditDto,
+  WrittenEntryDto,
 } from '@aa/contracts';
 
 /**
@@ -138,6 +139,35 @@ export const api = {
 
   erpReconciliation: (journalKey: 'wompi' | 'bancolombia', params: { runId?: string } = {}) =>
     get<ErpReconciliationDto>(`/erp-reconciliations/${journalKey}${query({ ...params })}`),
+
+  /**
+   * Crea en Odoo la corrección de una línea, en borrador.
+   *
+   * Se manda la referencia, no el asiento: el servidor lo reconstruye desde su
+   * propio reporte, así que este cliente no puede elegir cuenta ni monto.
+   */
+  createErpEntry: (body: { journalKey: 'wompi' | 'bancolombia'; ref: string; runId?: string }) =>
+    post<{ entryId: string; ref: string }>('/erp-journal-entries', body),
+
+  /**
+   * Los asientos que este sistema ya dejó escritos en ese diario.
+   *
+   * Se pregunta en cada carga de la pantalla, así la marca de "esto ya lo
+   * creaste" sigue estando después de recargar y desaparece sola si alguien
+   * borró el asiento en Odoo.
+   */
+  erpWrittenEntries: async (journalKey: 'wompi' | 'bancolombia') => {
+    const body = await get<{ entries: WrittenEntryDto[] }>(
+      `/erp-journal-entries${query({ journalKey })}`,
+    );
+    return body.entries;
+  },
+
+  /** Deshace la anterior. Sólo funciona sobre un borrador que creó el sistema. */
+  deleteErpEntry: (ref: string) =>
+    request<{ removed: boolean }>(`/erp-journal-entries/${encodeURIComponent(ref)}`, {
+      method: 'DELETE',
+    }),
 
   /** The Markdown report, as text. The caller decides what to do with it. */
   reportMarkdown: async (runId: string): Promise<string> => {

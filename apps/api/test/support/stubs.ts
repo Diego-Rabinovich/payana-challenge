@@ -154,6 +154,14 @@ export function stubDependencies(): ReadModel {
       list: async () => [],
     },
 
+    corrections: {
+      create: async () => {
+        throw new Error('los stubs no escriben en ningun ERP');
+      },
+      written: async () => [],
+      remove: async () => false,
+    },
+
     statements: {
       list: async () => [{ name: 'Extracto_Abril.pdf', bytes: 512_000, receivedAt: '2026-05-01T00:00:00Z' }],
       add: async ({ filename }) => ({

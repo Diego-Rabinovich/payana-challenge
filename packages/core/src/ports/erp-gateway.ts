@@ -1,4 +1,5 @@
-import type { ErpEntry } from '../domain/erp-entry.js';
+import type { Temporal } from '@js-temporal/polyfill';
+import type { ErpEntry, ErpEntryState } from '../domain/erp-entry.js';
 import type { ErpCorrection } from '../domain/erp-correction.js';
 import type { DateRange } from './source-connector.js';
 
@@ -22,6 +23,36 @@ export interface ErpGateway {
    * entry much less so.
    */
   createDraftEntry(correction: ErpCorrection): Promise<string>;
+
+  /**
+   * Removes an entry this system created, by its idempotency key.
+   *
+   * Exists so that creating one is reversible. An implementation must refuse
+   * anything it did not create, anything already posted, and anything outside
+   * the books it was given — undoing is not a licence to delete.
+   * Returns false when there was nothing to remove.
+   */
+  deleteDraftEntry(ref: string): Promise<boolean>;
+
+  /**
+   * Los asientos que este sistema dejó escritos en un diario.
+   *
+   * Existe para que la consola pueda decir "esto ya lo creaste" despues de
+   * recargar. Se pregunta al ERP en vez de anotarlo de nuestro lado: si un
+   * contador lo contabilizo o lo borro, la respuesta cambia, y una marca que
+   * miente es peor que no tener marca.
+   */
+  listOwnEntries(journalId: number): Promise<readonly OwnEntry[]>;
+}
+
+/** Un asiento nuestro, como esta hoy en el ERP. Sin lineas: es una marca. */
+export interface OwnEntry {
+  /** Nuestra clave de idempotencia; por eso sabemos que es nuestro. */
+  readonly ref: string;
+  readonly id: string;
+  readonly name: string;
+  readonly state: ErpEntryState;
+  readonly date: Temporal.PlainDate;
 }
 
 /** Whether this gateway is allowed to write at all, and why not if it is not. */

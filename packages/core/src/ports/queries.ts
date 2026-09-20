@@ -1,4 +1,5 @@
 import type { AccountMap } from '../domain/account-map.js';
+import type { OwnEntry } from './erp-gateway.js';
 import type { RuleSet } from '../domain/ruleset.js';
 import type { Account } from '../domain/account.js';
 import type { ErpReconciliationReport } from '../domain/erp-reconciliation.js';
@@ -128,6 +129,29 @@ export interface ChannelView {
   readonly observed?: { readonly lowest: number; readonly highest: number; readonly count: number };
 }
 
+/**
+ * La única escritura del sistema, y vive acá para que se vea.
+ *
+ * El llamador manda una referencia, nunca un asiento: el servidor reconstruye
+ * la corrección desde el reporte que él mismo produjo, así que un cliente no
+ * puede dictar cuentas ni montos. Todo lo demás que protege esta operación
+ * está en el adapter de Odoo, donde el alcance sale del plan de cuentas.
+ */
+export interface CorrectionWrites {
+  /** Crea en borrador la corrección de esa línea. Devuelve el id de Odoo. */
+  create(input: { journalKey: string; ref: string; runId?: string }): Promise<string>;
+  /** Deshace la anterior. Falso cuando no había nada que deshacer. */
+  remove(ref: string): Promise<boolean>;
+  /**
+   * Lo que dejamos escrito en ese diario, preguntado al ERP.
+   *
+   * La consola lo necesita para que la marca de "esto ya lo creaste"
+   * sobreviva a recargar la página, sin inventarse un registro propio que
+   * podría contradecir a Odoo.
+   */
+  written(journalKey: string): Promise<readonly OwnEntry[]>;
+}
+
 export interface ChannelQueries {
   list(runId?: string): Promise<readonly ChannelView[]>;
 }
@@ -171,5 +195,6 @@ export interface ReadModel {
   readonly runs: RunQueries;
   readonly statements: StatementQueries;
   readonly channels: ChannelQueries;
+  readonly corrections: CorrectionWrites;
   readonly health: HealthQueries;
 }

@@ -6,11 +6,12 @@ import {
   ReconciliationSummaryDto,
   SettlementBatchDto,
   UnattributedCreditDto,
+  WrittenEntryDto,
 } from '@aa/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { NotFoundError } from '../plugins/error-handler.js';
+import { NotFoundError, RejectedError } from '../plugins/error-handler.js';
 import {
   toErpReconciliationDto,
   toMovementDto,
@@ -19,7 +20,14 @@ import {
   toSettlementBatchDto,
   toUnattributedCreditDto,
 } from '@aa/adapters';
-import type { AccountMap, ErpQueries, FlowQueries, LedgerQueries, RuleSet } from '@aa/core';
+import type {
+  AccountMap,
+  CorrectionWrites,
+  ErpQueries,
+  FlowQueries,
+  LedgerQueries,
+  RuleSet,
+} from '@aa/core';
 
 const StatusFilter = z
   .enum(['confirmed', 'probable', 'ambiguous', 'unmatched'])
@@ -58,6 +66,7 @@ export const reconciliationRoutes =
     flow: FlowQueries,
     erp: ErpQueries,
     ledger: LedgerQueries,
+    corrections: CorrectionWrites,
     accountMap: AccountMap,
     ruleSet: RuleSet,
   ): FastifyPluginAsync =>
@@ -268,6 +277,91 @@ export const reconciliationRoutes =
 
         const { items, ...rest } = page(all, { limit, offset });
         return { credits: items, page: rest };
+      },
+    );
+
+    app.post(
+      '/erp-journal-entries',
+      {
+        schema: {
+          tags: ['erp'],
+          summary: 'Crea en Odoo, en borrador, la corrección que una línea implica',
+          description:
+            'El cuerpo lleva una referencia, nunca un asiento: el servidor reconstruye la ' +
+            'corrección desde el reporte que él mismo produjo, así que un cliente no puede ' +
+            'dictar cuentas ni montos. El alcance de la escritura sale del plan de cuentas en ' +
+            'config/odoo-accounts.json — un diario que no esté ahí no se puede tocar.',
+          body: z.object({
+            journalKey: z.enum(['wompi', 'bancolombia']),
+            ref: z.string().startsWith('mov:'),
+            runId: z.string().optional(),
+          }),
+          response: { 201: z.object({ entryId: z.string(), ref: z.string() }) },
+        },
+      },
+      async (request, reply) => {
+        const { journalKey, ref, runId } = request.body;
+        try {
+          const entryId = await corrections.create({
+            journalKey,
+            ref,
+            ...(runId ? { runId } : {}),
+          });
+          void reply.status(201);
+          return { entryId, ref };
+        } catch (cause) {
+          throw new RejectedError(cause instanceof Error ? cause.message : 'Odoo rechazó el asiento');
+        }
+      },
+    );
+
+    app.get(
+      '/erp-journal-entries',
+      {
+        schema: {
+          tags: ['erp'],
+          summary: 'Los asientos que este sistema dejó escritos en un diario',
+          description:
+            'Se le pregunta a Odoo, no a una anotación nuestra: si alguien contabilizó o borró ' +
+            'el asiento, la respuesta cambia. La consola lo usa para marcar en la tabla lo que ' +
+            'ya se creó, de manera que la marca sobreviva a recargar la página.',
+          querystring: z.object({ journalKey: z.enum(['wompi', 'bancolombia']) }),
+          response: { 200: z.object({ entries: z.array(WrittenEntryDto) }) },
+        },
+      },
+      async (request) => {
+        const entries = await corrections.written(request.query.journalKey);
+        return {
+          entries: entries.map((entry) => ({
+            ref: entry.ref,
+            entryId: entry.id,
+            name: entry.name,
+            state: entry.state,
+            date: entry.date.toString(),
+          })),
+        };
+      },
+    );
+
+    app.delete(
+      '/erp-journal-entries/:ref',
+      {
+        schema: {
+          tags: ['erp'],
+          summary: 'Deshace un asiento que creó este sistema',
+          description:
+            'Sólo un borrador, sólo con nuestra referencia, sólo en nuestros diarios. Si un ' +
+            'contador lo contabilizó o le cambió la referencia, ya no es nuestro y esto se niega.',
+          params: z.object({ ref: z.string().startsWith('mov:') }),
+          response: { 200: z.object({ removed: z.boolean() }) },
+        },
+      },
+      async (request) => {
+        try {
+          return { removed: await corrections.remove(request.params.ref) };
+        } catch (cause) {
+          throw new RejectedError(cause instanceof Error ? cause.message : 'Odoo rechazó el borrado');
+        }
       },
     );
 
