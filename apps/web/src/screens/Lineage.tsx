@@ -1,6 +1,7 @@
 import type { LineageDto } from '@aa/contracts';
 import { Link, useParams } from 'react-router-dom';
 import { api, show } from '../api/client.js';
+import { useRun } from '../components/Filters.js';
 import { Resolved } from '../components/States.js';
 import { useResource } from '../lib/useResource.js';
 
@@ -21,6 +22,7 @@ const STAGE_LABEL: Record<LineageDto['steps'][number]['stage'], string> = {
  */
 export function Lineage() {
   const { movementId = '' } = useParams();
+  const run = useRun();
   const resource = useResource(() => api.lineage(movementId), [movementId]);
 
   return (
@@ -63,17 +65,32 @@ export function Lineage() {
             </div>
 
             <div className="steps">
-              {lineage.steps.map((step, index) => (
-                <div className="step" key={`${step.stage}-${index}`}>
-                  <div>
-                    <div className="step__name">{STAGE_LABEL[step.stage]}</div>
-                    <code className="faint">{step.ref}</code>
+              {lineage.steps.map((step, index) => {
+                const corte = lineage.steps.find((other) => other.stage === 'BATCH')?.date;
+                return (
+                  <div className="step" key={`${step.stage}-${index}`}>
+                    <div>
+                      <div className="step__name">{STAGE_LABEL[step.stage]}</div>
+                      {/* Desde el crédito, lo que se quiere ver es la liquidación que
+                          lo reclamó y su evidencia. El linaje de un crédito no existe:
+                          es el final de una cadena, no el principio. */}
+                      {step.stage === 'BANK_CREDIT' && corte ? (
+                        <Link
+                          className="faint"
+                          to={`/conciliacion?from=${corte}&to=${corte}${run ? `&run=${run}` : ''}`}
+                        >
+                          <code>{step.ref}</code> · ver la liquidación
+                        </Link>
+                      ) : (
+                        <code className="faint">{step.ref}</code>
+                      )}
+                    </div>
+                    <div className="muted">{step.date}</div>
+                    <div className="num">{show(step.amount)}</div>
+                    <div className="muted">{step.detail}</div>
                   </div>
-                  <div className="muted">{step.date}</div>
-                  <div className="num">{show(step.amount)}</div>
-                  <div className="muted">{step.detail}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {!lineage.settled && (
@@ -85,14 +102,7 @@ export function Lineage() {
 
             <p className="faint" style={{ marginTop: 16 }}>
               El neto atribuido es la parte proporcional de este pago sobre el giro del lote. Las
-              partes de un lote suman exactamente lo acreditado, sin perder ni inventar un centavo.{' '}
-              {lineage.bankCreditId && (
-                <>
-                  Crédito: <Link to={`/movimientos/${lineage.bankCreditId}`}>
-                    <code>{lineage.bankCreditId}</code>
-                  </Link>
-                </>
-              )}
+              partes de un lote suman exactamente lo acreditado, sin perder ni inventar un centavo.
             </p>
           </div>
         );

@@ -77,12 +77,12 @@ function LedgerFor({ accounts }: { accounts: readonly AccountDto[] }) {
         salió. Es la salida de la fase 1 y la base de todo lo demás.
       </p>
 
-      <div className="nav" style={{ marginTop: 0, marginBottom: 14 }}>
+      <div className="segmented">
         {accounts.map((option) => (
           <button
             key={option.id}
             type="button"
-            className={option.id === selected ? 'nav__link nav__link--active' : 'nav__link'}
+            className={option.id === selected ? 'segmented__item segmented__item--on' : 'segmented__item'}
             onClick={() => selectAccount(option.id)}
           >
             {option.name}

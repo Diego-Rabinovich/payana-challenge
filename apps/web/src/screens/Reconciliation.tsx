@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, show } from '../api/client.js';
 import { ConfidenceMeter, EvidenceList, StatusChip } from '../components/Confidence.js';
-import { PeriodFilter, StatusFilter, Pager, useFilter } from '../components/Filters.js';
+import { PeriodFilter, StatusFilter, Pager, useFilter, useRun } from '../components/Filters.js';
 import { SettlementDetail } from '../components/SettlementDetail.js';
 import { Empty, Failed, Loading } from '../components/States.js';
 import { useResource } from '../lib/useResource.js';
@@ -29,19 +29,21 @@ function money(cents: number): string {
  * list.
  */
 export function Reconciliation() {
+  const run = useRun();
   const [filter, update] = useFilter({ limit: 25 });
   const [open, setOpen] = useState<string | null>(null);
 
   const page = useResource(
     () =>
       api.reconciliations({
+        ...(run ? { runId: run } : {}),
         ...(filter.status ? { status: filter.status } : {}),
         ...(filter.from ? { from: filter.from } : {}),
         ...(filter.to ? { to: filter.to } : {}),
         limit: filter.limit,
         offset: filter.offset,
       }),
-    [filter.status, filter.from, filter.to, filter.limit, filter.offset],
+    [run, filter.status, filter.from, filter.to, filter.limit, filter.offset],
   );
 
   return (

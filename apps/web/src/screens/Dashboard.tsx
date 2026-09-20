@@ -2,6 +2,7 @@ import type { ReconciliationSummaryDto } from '@aa/contracts';
 import { Link } from 'react-router-dom';
 import { api, show } from '../api/client.js';
 import { Failed, Loading } from '../components/States.js';
+import { useRun } from '../components/Filters.js';
 import { useResource } from '../lib/useResource.js';
 
 /**
@@ -12,7 +13,8 @@ import { useResource } from '../lib/useResource.js';
  * detail lives one click away.
  */
 export function Dashboard() {
-  const summary = useResource(() => api.summary());
+  const run = useRun();
+  const summary = useResource(() => api.summary(run), [run]);
 
   if (summary.state === 'loading') return <Loading />;
   if (summary.state === 'failed') return <Failed resource={summary} />;

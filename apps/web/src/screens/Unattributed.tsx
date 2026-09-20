@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 import { api, show } from '../api/client.js';
-import { PeriodFilter, Pager, useFilter } from '../components/Filters.js';
+import { PeriodFilter, Pager, useFilter, useRun } from '../components/Filters.js';
 import { Empty, Failed, Loading } from '../components/States.js';
 import { useResource } from '../lib/useResource.js';
 
@@ -14,6 +14,7 @@ import { useResource } from '../lib/useResource.js';
  * real findings under a hundred and fifty irrelevant rows.
  */
 export function Unattributed() {
+  const run = useRun();
   const [filter, update] = useFilter({ limit: 25 });
   const [params, setParams] = useSearchParams();
   const channel = (params.get('channel') ?? 'wompi') as 'wompi' | 'other' | 'all';
@@ -22,12 +23,13 @@ export function Unattributed() {
     () =>
       api.unattributedCredits({
         channel,
+        ...(run ? { runId: run } : {}),
         ...(filter.from ? { from: filter.from } : {}),
         ...(filter.to ? { to: filter.to } : {}),
         limit: filter.limit,
         offset: filter.offset,
       }),
-    [channel, filter.from, filter.to, filter.limit, filter.offset],
+    [run, channel, filter.from, filter.to, filter.limit, filter.offset],
   );
 
   const setChannel = (next: string) => {
