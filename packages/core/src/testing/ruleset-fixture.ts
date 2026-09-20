@@ -41,7 +41,6 @@ export const TEST_RULESET_CONFIG: RuleSetConfig = {
         vat: { numerator: 19, denominator: 100 },
         withholding: { numerator: 15, denominator: 1000 },
         plausibleTotalBand: [0.04, 0.05],
-        typicalTotalBand: [0.0425, 0.0445],
         truncationSlackPerCharge: 3,
       },
     },

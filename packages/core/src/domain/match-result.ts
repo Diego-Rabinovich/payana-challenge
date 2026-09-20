@@ -3,6 +3,7 @@ import type { Confidence, MatchBand } from './confidence.js';
 import type { EvidenceCode } from './evidence.js';
 import type { BatchId, MatchId, MovementId, RunId } from './ids.js';
 import type { Money } from './money.js';
+import type { RateCalibration } from './rate-calibration.js';
 
 /**
  * The conclusion of a channel-to-bank comparison.
@@ -95,6 +96,14 @@ export interface UnattributedCredit {
 export interface ReconciliationReport {
   readonly runId?: RunId;
   readonly rulesetVersion: string;
+  /**
+   * What this run measured the channel to usually charge.
+   *
+   * Part of the result rather than of the configuration, so a run can be
+   * read years later against the distribution it was actually scored
+   * against. Absent when too few settlements matched to say anything.
+   */
+  readonly calibration?: RateCalibration;
   readonly matches: readonly MatchResult[];
   readonly unattributed: readonly UnattributedCredit[];
   readonly totals: {

@@ -48,8 +48,17 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
 
   // Revived, not cast: what comes back from Postgres is JSON, and the domain
   // objects have to be rebuilt before anything calls a method on them.
-  const latestFlow = async (): Promise<ReconciliationReport | undefined> => {
-    const stored = await repositories.reports.latest<unknown>('flow', 'wompi');
+  /**
+   * One run's flow report, or the most recent one.
+   *
+   * Every query takes the run id and none of them used to: the console could
+   * list past runs and then show the latest one's numbers under any of their
+   * names, which is worse than not offering the list at all.
+   */
+  const flowOf = async (runId?: string): Promise<ReconciliationReport | undefined> => {
+    const stored = runId
+      ? await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi')
+      : await repositories.reports.latest<unknown>('flow', 'wompi');
     return stored ? reviveFlowReport(stored) : undefined;
   };
 
@@ -107,7 +116,7 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
           candidate.chargeIds.includes(charge.id),
         );
         const match = batch
-          ? (await latestFlow())?.matches.find((m) => m.left.batchId === batch.id)
+          ? (await flowOf())?.matches.find((m) => m.left.batchId === batch.id)
           : undefined;
 
         return correlate({
@@ -133,8 +142,8 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       listBatches: async () => currentBatches(),
       findBatch: async (batchId) => (await currentBatches()).find((batch) => batch.id === batchId),
 
-      listReconciliations: async ({ status }) => {
-        const report = await latestFlow();
+      listReconciliations: async ({ status, runId }) => {
+        const report = await flowOf(runId);
         const matches = report?.matches ?? [];
         if (!status) return matches;
 
@@ -146,24 +155,25 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       },
 
       findReconciliation: async (matchId) =>
-        (await latestFlow())?.matches.find((match) => match.id === matchId),
+        (await flowOf())?.matches.find((match) => match.id === matchId),
 
-      flowReport: async () => latestFlow(),
+      flowReport: async (runId) => flowOf(runId),
     },
 
     erp: {
-      erpReconciliation: async ({ journalKey }) => {
-        const stored = await repositories.reports.latest<unknown>('erp', journalKey);
+      erpReconciliation: async ({ journalKey, runId }) => {
+        const stored = runId
+          ? await repositories.reports.load<unknown>(asRunId(runId), 'erp', journalKey)
+          : await repositories.reports.latest<unknown>('erp', journalKey);
         return stored ? reviveErpReport(stored) : undefined;
       },
     },
 
     channels: {
       list: async (runId) => {
-        const report = await latestFlow();
-        void runId;
+        const report = await flowOf(runId);
         return ruleSet.channelKeys.map((key) =>
-          describeChannel(key, ruleSet, key === 'wompi' ? (report?.matches ?? []) : []),
+          describeChannel(key, ruleSet, report?.matches ?? [], report?.calibration),
         );
       },
     },
@@ -210,7 +220,7 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     if (!batch) return undefined;
 
     const charges = await chargesOf(batch);
-    const match = (await latestFlow())?.matches.find((m) => m.left.batchId === batch.id);
+    const match = (await flowOf())?.matches.find((m) => m.left.batchId === batch.id);
     // The first credit is the one a lineage view follows; a split settlement
     // is shown in full on the reconciliation screen, not here.
     const settlingId = match?.right?.movementIds[0];
@@ -241,7 +251,13 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     const runId = asRunId(`run_${startedAt.replace(/[^0-9]/g, '').slice(0, 14)}`);
     const range = { from: Temporal.PlainDate.from(from), to: Temporal.PlainDate.from(to) };
 
-    await repositories.runs.create({ id: runId, startedAt, rulesetVersion: ruleSet.version });
+    await repositories.runs.create({
+      id: runId,
+      startedAt,
+      rulesetVersion: ruleSet.version,
+      from,
+      to,
+    });
 
     for (const sourceId of [deps.sources.wompi, deps.sources.bank]) {
       await useCases.ingest.execute({ sourceId, range, runId });
@@ -293,12 +309,19 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
   }
 }
 
-function toRunRecord(run: { id: string; startedAt: string; rulesetVersion: string }): RunRecord {
+function toRunRecord(run: {
+  id: string;
+  startedAt: string;
+  finishedAt?: string;
+  rulesetVersion: string;
+  range: { from: string; to: string };
+}): RunRecord {
   return {
     id: run.id,
     startedAt: run.startedAt,
+    ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
     rulesetVersion: run.rulesetVersion,
-    range: { from: '1970-01-01', to: '1970-01-01' },
+    range: run.range,
     inputHashes: {},
   };
 }

@@ -83,7 +83,7 @@ export const api = {
   accounts: () => get<{ accounts: AccountDto[] }>('/accounts'),
 
   /** Connected sources, their settings, and what the last run observed. */
-  channels: () => get<{ channels: ChannelDto[] }>('/channels'),
+  channels: (runId?: string) => get<{ channels: ChannelDto[] }>(`/channels${query({ runId })}`),
 
   movements: (accountId: string, params: Window = {}) =>
     get<{ movements: MovementDto[]; page: OffsetPageDto & { nextCursor: string | null } }>(

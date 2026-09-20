@@ -187,9 +187,8 @@ describe('una fuente con otra comisión no toca a las demás', () => {
     deductions: {
       vat: { numerator: 19, denominator: 100 },
       withholding: { numerator: 15, denominator: 1000 },
-      // Charges far more than Wompi: 9% to 11%, usually 9,5% to 10%.
+      // Charges far more than Wompi: 9% to 11% is normal for it.
       plausibleTotalBand: [0.09, 0.11] as const,
-      typicalTotalBand: [0.095, 0.1] as const,
       truncationSlackPerCharge: 3,
     },
   };
@@ -199,30 +198,23 @@ describe('una fuente con otra comisión no toca a las demás', () => {
     channels: { ...TEST_RULESET_CONFIG.channels, caro: EXPENSIVE },
   });
 
-  it('cada canal juzga contra su propia banda', () => {
-    expect(ruleSet.feeBandsFor('wompi').typical).toEqual([0.0425, 0.0445]);
-    expect(ruleSet.feeBandsFor('caro').typical).toEqual([0.095, 0.1]);
-
-    // And neither leaks into the other: a 10% gap is normal for one and
-    // inadmissible for the other, which is the entire point.
-    const [wompiLow, wompiHigh] = ruleSet.feeBandsFor('wompi').admissible;
+  it('cada canal admite lo suyo, y nada de lo del otro', () => {
+    // A 10% gap is ordinary for one and inadmissible for the other. Sharing a
+    // band would mean either widening Wompi's until it stopped discriminating
+    // or rejecting perfectly normal settlements of the new source.
+    const [wompiLow, wompiHigh] = ruleSet.admissibleFeeBandFor('wompi');
     expect(0.1 >= wompiLow && 0.1 <= wompiHigh).toBe(false);
+    expect(0.043 >= wompiLow && 0.043 <= wompiHigh).toBe(true);
 
-    const [caroLow, caroHigh] = ruleSet.feeBandsFor('caro').admissible;
+    const [caroLow, caroHigh] = ruleSet.admissibleFeeBandFor('caro');
     expect(0.1 >= caroLow && 0.1 <= caroHigh).toBe(true);
     expect(0.043 >= caroLow && 0.043 <= caroHigh).toBe(false);
   });
 
   it('una fuente sin declarar nada cae en el default ancho, no en el de otro', () => {
-    // `pos` declares only its descriptor patterns. It must not inherit the
-    // band someone measured for Wompi — that would be one gateway deciding
-    // what another is allowed to charge.
-    expect(ruleSet.feeBandsFor('pos').admissible).toEqual(
+    expect(ruleSet.admissibleFeeBandFor('desconocido')).toEqual(
       TEST_RULESET_CONFIG.tolerances.impliedFeeRateBand,
     );
-    // With nothing observed, the check is ungraded rather than wrong: the
-    // typical band collapses onto the admissible one.
-    expect(ruleSet.feeBandsFor('pos').typical).toEqual(ruleSet.feeBandsFor('pos').admissible);
   });
 
   it('la ventana de liquidación también es del canal', () => {

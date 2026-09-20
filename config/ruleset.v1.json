@@ -81,26 +81,12 @@
           0.04,
           0.05
         ],
-        "typicalTotalBand": [
-          0.0425,
-          0.0445
-        ],
         "truncationSlackPerCharge": 3
-      }
-    },
-    "pos": {
-      "counterpartyPatterns": [
-        "REDEBAN",
-        "CREDIBANCO"
-      ]
-    },
-    "druo": {
-      "counterpartyPatterns": [
-        "DRUO"
-      ]
+      },
+      "deductionNotes": "The admissible band only. 1.5% withholding is statutory and always present; the rest is the commission plus 19% VAT on it, so a commission of 2.1-2.95% produces a total of 4-5%. What the channel *usually* charges is not written here: it is measured over each run and reported with it, because a band frozen in config grades every future run against whatever period someone last looked at."
     }
   },
-  "channelNotes": "Patterns say how a channel names itself on a bank statement. This is reconciliation policy, not an ingestion fact: config/descriptors.json records the counterparty a descriptor names, and this decides whether that name is the channel we expected. Keeping them apart is what stops DESCRIPTOR_MATCH from scoring a conclusion ingestion already reached.",
+  "channelNotes": "One entry per source actually connected. Wompi is the only one: POS and DRUO appear in the bank statement as other payers, and are recognised as such precisely because they are NOT channels here — a credit that does not name the channel being reconciled fails DESCRIPTOR_FOREIGN, which is a gate.",
   "statutoryRates": {
     "vat": {
       "numerator": 19,

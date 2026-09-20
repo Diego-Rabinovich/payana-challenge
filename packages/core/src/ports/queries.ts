@@ -5,6 +5,7 @@ import type { ErpReconciliationReport } from '../domain/erp-reconciliation.js';
 import type { MatchResult, ReconciliationReport } from '../domain/match-result.js';
 import type { Movement } from '../domain/movement.js';
 import type { SettlementBatch } from '../domain/settlement-batch.js';
+import type { RateCalibration } from '../domain/rate-calibration.js';
 import type { Correlation } from '../usecases/correlate.js';
 import type { Lineage } from '../usecases/trace-movement.js';
 
@@ -105,37 +106,26 @@ export interface SourceStatus {
 }
 
 /**
- * What the last run observed about a channel's commission.
+ * A connected source: how it settles, and what the last run measured about it.
  *
- * Calibration is a reading, not an action. There is nothing to press: once a
- * run exists, the implied rates are simply there to be looked at, and the
- * question the screen answers is whether the band in config still describes
- * them. A channel whose source states its own deductions has no calibration at
- * all, and says so rather than showing an empty chart.
+ * `calibration` is read back from the run rather than recomputed, so what the
+ * screen shows is exactly the band the score was awarded against. Absent when
+ * too few settlements matched to say what is usual.
  */
-export interface ChannelCalibration {
-  readonly settlements: number;
-  readonly deductionsAreReported: boolean;
-  /** Implied total deduction rates, ascending. Empty when reported. */
-  readonly observedRates: readonly number[];
-  readonly median?: number;
-  readonly deviation?: number;
-  /** Median ± one deviation: what the typical band would be if measured now. */
-  readonly suggestedTypicalBand?: readonly [number, number];
-  readonly insideTypical: number;
-  readonly insideAdmissible: number;
-}
-
 export interface ChannelView {
   readonly key: string;
   readonly counterpartyPatterns: readonly string[];
   readonly cadence: string;
   readonly cutoff?: string;
   readonly window: { readonly fromBusinessDays: number; readonly toBusinessDays: number };
+  /** The only band in configuration: a guard, not a grade. */
   readonly admissibleBand: readonly [number, number];
-  readonly typicalBand: readonly [number, number];
   readonly declaresOwnBand: boolean;
-  readonly calibration: ChannelCalibration;
+  /** True when the source states its deductions, so nothing had to be implied. */
+  readonly reportsOwnDeductions: boolean;
+  readonly settlements: number;
+  readonly calibration?: RateCalibration;
+  readonly observed?: { readonly lowest: number; readonly highest: number; readonly count: number };
 }
 
 export interface ChannelQueries {

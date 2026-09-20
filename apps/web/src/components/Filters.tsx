@@ -17,6 +17,18 @@ export interface Filter {
   readonly limit: number;
 }
 
+/**
+ * The run every screen is about.
+ *
+ * Undefined means "the most recent", which is what the API does with an absent
+ * runId. Reading it from the URL rather than from a context keeps a screen a
+ * link someone can send.
+ */
+export function useRun(): string | undefined {
+  const [params] = useSearchParams();
+  return params.get('run') ?? undefined;
+}
+
 export function useFilter(defaults: { limit?: number } = {}): [Filter, (patch: Partial<Filter>) => void] {
   const [params, setParams] = useSearchParams();
   const limit = Number(params.get('limit') ?? defaults.limit ?? 25);

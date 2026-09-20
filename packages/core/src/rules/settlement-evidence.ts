@@ -83,7 +83,7 @@ export function expectedTotal(
     };
   }
 
-  const [low, high] = ruleSet.feeBandsFor(channel).admissible;
+  const [low, high] = ruleSet.admissibleFeeBandFor(channel);
   const midpoint = (low + high) / 2;
   return {
     targetCents: Math.round(batch.gross.cents * (1 - midpoint)),
@@ -134,39 +134,29 @@ export function amountEvidence(
     });
   }
 
-  // No breakdown was published, so the amount cannot be checked against a
-  // stated figure — only against what the channel's commission normally costs.
-  // That is real evidence, and it is graded, because "4,31%, right on the
-  // usual rate" and "4,69%, at the edge of plausible" are not the same claim.
-  // Treating both as a single pass was what put fifty-one of fifty-six
-  // settlements on exactly the same score.
+  // No breakdown was published, so the amount can only be checked against what
+  // a commission may plausibly cost. That band is a guard: inside it the
+  // candidate stands, outside it is not a commission at all.
+  //
+  // Whether the rate is *usual* is a different question, and this is the wrong
+  // moment to ask it — the answer depends on the whole run's distribution,
+  // which does not exist until matching has finished. A second pass upgrades
+  // this to IMPLIED_FEE_TYPICAL once it does.
   const reportedNothing = batch.deductions.length === 0;
   const rate = amounts.impliedDeductionRate ?? Number.NaN;
-  const { admissible, typical } = ruleSet.feeBandsFor(channel);
-  const [low, high] = admissible;
-  const [usualLow, usualHigh] = typical;
+  const [low, high] = ruleSet.admissibleFeeBandFor(channel);
 
   if (reportedNothing && rate >= low && rate <= high) {
     const gap = amounts.gross.minus(amounts.observedNet ?? Money.zero());
-    const typical = rate >= usualLow && rate <= usualHigh;
 
     // Not "expected 12.905.740 / observed 12.349.340", which reads as a
     // mismatch when the difference is the whole point. The comparison that
-    // matters is the rate against the rate.
-    const rates = {
-      expected: `${percent(usualLow)}–${percent(usualHigh)} del bruto`,
+    // matters is the rate against the band.
+    return evidence('IMPLIED_FEE_IN_BAND', 'AMOUNT', true, {
+      expected: `${percent(low)}–${percent(high)} del bruto`,
       observed: `${percent(rate)} · ${gap.toString()} sobre ${amounts.gross.toString()}`,
-    };
-
-    return typical
-      ? evidence('IMPLIED_FEE_TYPICAL', 'AMOUNT', true, {
-          ...rates,
-          detail: 'la diferencia coincide con lo que este canal suele cobrar',
-        })
-      : evidence('IMPLIED_FEE_IN_BAND', 'AMOUNT', true, {
-          ...rates,
-          detail: 'plausible, pero fuera de la tasa habitual del canal',
-        });
+      detail: 'la diferencia es explicable como comisión',
+    });
   }
 
   return evidence('AMOUNT_MISMATCH', 'AMOUNT', false, {

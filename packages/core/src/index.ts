@@ -15,6 +15,7 @@ export * from './domain/money.js';
 export * from './domain/money-math.js';
 export * from './domain/movement.js';
 export * from './domain/erp-correction.js';
+export * from './domain/rate-calibration.js';
 export * from './domain/ruleset.js';
 export * from './domain/settlement-batch.js';
 export * from './domain/settlement-policy.js';

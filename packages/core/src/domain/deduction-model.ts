@@ -37,15 +37,6 @@ export interface DeductionRates {
    * outside that band something other than fees explains the gap.
    */
   readonly plausibleTotalBand: readonly [number, number];
-  /**
-   * The narrower rate this channel actually charges, when it is known.
-   *
-   * Inside it the gap is strong evidence; merely inside `plausibleTotalBand`
-   * it is weak evidence. Absent means the two are the same and the amount
-   * check is not graded — which is the right default for a channel nobody has
-   * observed yet.
-   */
-  readonly typicalTotalBand?: readonly [number, number];
   /** Cents of slack per charge, since the gateway truncates each concept. */
   readonly truncationSlackPerCharge: number;
 }

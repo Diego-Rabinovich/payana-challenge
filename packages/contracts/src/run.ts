@@ -127,20 +127,14 @@ export type EvidenceCodeInfoDto = z.infer<typeof EvidenceCodeInfoDto>;
 const RateDto = z.number().min(0).max(1);
 
 /**
- * What the last run observed about a channel's commission, next to what the
- * config declares. A reading, not a procedure — see channel-calibration.ts.
+ * What a run measured the channel to usually charge. Part of the result, not
+ * of the configuration — see rate-calibration.ts.
  */
-export const ChannelCalibrationDto = z.object({
+export const RateCalibrationDto = z.object({
   settlements: z.number().int(),
-  deductionsAreReported: z
-    .boolean()
-    .describe('True when the source states its own deductions, so nothing had to be implied'),
-  observedRates: z.array(RateDto),
-  median: RateDto.optional(),
-  deviation: z.number().optional(),
-  suggestedTypicalBand: z.tuple([RateDto, RateDto]).optional(),
-  insideTypical: z.number().int(),
-  insideAdmissible: z.number().int(),
+  median: RateDto,
+  deviation: z.number(),
+  typicalBand: z.tuple([RateDto, RateDto]),
 });
 
 export const ChannelDto = z.object({
@@ -150,12 +144,14 @@ export const ChannelDto = z.object({
   cutoff: z.string().optional(),
   window: z.object({ fromBusinessDays: z.number().int(), toBusinessDays: z.number().int() }),
   admissibleBand: z.tuple([RateDto, RateDto]),
-  typicalBand: z.tuple([RateDto, RateDto]),
-  declaresOwnBand: z
-    .boolean()
-    .describe('False when the channel is falling back on the global default'),
-  calibration: ChannelCalibrationDto,
+  declaresOwnBand: z.boolean(),
+  reportsOwnDeductions: z.boolean(),
+  settlements: z.number().int(),
+  calibration: RateCalibrationDto.optional(),
+  observed: z
+    .object({ lowest: RateDto, highest: RateDto, count: z.number().int() })
+    .optional(),
 });
 
 export type ChannelDto = z.infer<typeof ChannelDto>;
-export type ChannelCalibrationDto = z.infer<typeof ChannelCalibrationDto>;
+export type RateCalibrationDto = z.infer<typeof RateCalibrationDto>;

@@ -1,6 +1,7 @@
 import type { BusinessCalendar } from '../domain/business-calendar.js';
 import { type DeductionRates, deriveDeductions } from '../domain/deduction-model.js';
 import { type Evidence, evidence } from '../domain/evidence.js';
+import { scoreMatch } from '../domain/confidence.js';
 import { deriveMatchId } from '../domain/identity.js';
 import type { AccountId, BatchId, RunId } from '../domain/ids.js';
 import type {
@@ -11,6 +12,11 @@ import type {
   UnattributedCredit,
 } from '../domain/match-result.js';
 import { Money } from '../domain/money.js';
+import {
+  type RateCalibration,
+  calibrateRates,
+  isTypical,
+} from '../domain/rate-calibration.js';
 import type { Movement } from '../domain/movement.js';
 import type { RuleSet } from '../domain/ruleset.js';
 import { type SettlementBatch, buildSettlementBatches } from '../domain/settlement-batch.js';
@@ -103,9 +109,22 @@ export class ReconcileFlow {
     }
 
     const assignments = assignCandidates(batches, candidatesByBatch, this.ruleSet);
-    const matches = assignments.map((assignment) =>
+    const provisional = assignments.map((assignment) =>
       this.toMatchResult(assignment, input, policy),
     );
+
+    // Second pass. Matching is finished and nothing below can change it:
+    // what the channel usually charges is measured over the settlements
+    // that matched, and the ones sitting on that rate are credited for it.
+    // Only points move, which is what keeps using the run's own data here
+    // from being circular. See rate-calibration.ts.
+    const calibration = calibrateRates(
+      provisional
+        .filter((match) => match.right !== null)
+        .map((match) => match.derivedDeductions?.impliedRate)
+        .filter((rate): rate is number => rate !== undefined),
+    );
+    const matches = provisional.map((match) => this.creditTypical(match, calibration));
 
     return {
       ...(input.runId ? { runId: input.runId } : {}),
@@ -113,6 +132,7 @@ export class ReconcileFlow {
       matches,
       unattributed: this.unattributedCredits(bankMovements, matches, input.channel),
       totals: summarise(matches, batches),
+      ...(calibration ? { calibration } : {}),
     };
   }
 
@@ -174,6 +194,42 @@ export class ReconcileFlow {
       confidence: derived ? withDerivationEvidence(confidence, derived) : confidence,
       ...(derived ? { derivedDeductions: derived } : {}),
       alternatives,
+    };
+  }
+
+  /**
+   * Awards the points a settlement earns for sitting on the usual rate.
+   *
+   * Strictly additive: it can turn IMPLIED_FEE_IN_BAND into
+   * IMPLIED_FEE_TYPICAL and re-score, and it can do nothing else. A match
+   * cannot be made or unmade here, a band cannot reject anything, and a
+   * settlement outside the usual rate keeps every point it had.
+   */
+  private creditTypical(match: MatchResult, calibration: RateCalibration | undefined): MatchResult {
+    const rate = match.derivedDeductions?.impliedRate;
+    if (match.right === null || rate === undefined) return match;
+    if (!isTypical(rate, calibration)) return match;
+
+    const [low, high] = calibration!.typicalBand;
+    const upgraded = match.confidence.components.map((item) =>
+      item.code === 'IMPLIED_FEE_IN_BAND'
+        ? {
+            ...item,
+            code: 'IMPLIED_FEE_TYPICAL' as const,
+            expected: `${percent(low)}–${percent(high)} · lo habitual en esta corrida`,
+            detail: 'la diferencia coincide con lo que este canal cobró en el resto del período',
+          }
+        : item,
+    );
+    if (upgraded === match.confidence.components) return match;
+
+    const contested = match.status === 'AMBIGUOUS';
+    const confidence = scoreMatch(upgraded, this.ruleSet.scoring, { contested });
+
+    return {
+      ...match,
+      confidence,
+      status: confidence.band as MatchStatus,
     };
   }
 
@@ -303,4 +359,9 @@ function summarise(
     observedNet,
     unexplained: expectedNet.minus(observedNet),
   };
+}
+
+/** Rates read as percentages everywhere a person sees them. */
+function percent(value: number): string {
+  return `${(value * 100).toFixed(2).replace('.', ',')}%`;
 }

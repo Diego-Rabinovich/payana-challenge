@@ -155,11 +155,18 @@ type RunRow = {
 export class PgRunRepository implements RunRepository {
   constructor(private readonly db: PgClient) {}
 
-  async create(run: { id: RunId; startedAt: string; rulesetVersion: string }): Promise<void> {
+  async create(run: {
+    id: RunId;
+    startedAt: string;
+    rulesetVersion: string;
+    /** The period asked for. Placeholder dates made every run look identical. */
+    from: string;
+    to: string;
+  }): Promise<void> {
     await this.db.query(
       `insert into runs (id, started_at, ruleset_version, range_from, range_to)
        values ($1, $2, $3, $4, $5) on conflict (id) do nothing`,
-      [run.id, run.startedAt, run.rulesetVersion, '1970-01-01', '1970-01-01'],
+      [run.id, run.startedAt, run.rulesetVersion, run.from, run.to],
     );
   }
 
@@ -289,7 +296,9 @@ function toRun(row: RunRow) {
   return {
     id: runId(row.id),
     startedAt: row.started_at.toISOString(),
+    ...(row.finished_at ? { finishedAt: row.finished_at.toISOString() } : {}),
     rulesetVersion: row.ruleset_version,
+    range: { from: toIsoDate(row.range_from), to: toIsoDate(row.range_to) },
   };
 }
 

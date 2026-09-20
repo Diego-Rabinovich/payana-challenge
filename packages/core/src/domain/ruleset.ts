@@ -30,12 +30,6 @@ export interface RuleSetConfig extends ScoringConfig {
     readonly identityCents: number;
     /** Plausible total deduction rate when the source did not report one. */
     readonly impliedFeeRateBand: readonly [number, number];
-    /**
-     * The narrower rate the channel actually charges. Inside it the gap is
-     * strong evidence; merely inside `impliedFeeRateBand` it is weak evidence.
-     * Absent means the two are the same and the check is not graded.
-     */
-    readonly typicalFeeRateBand?: readonly [number, number];
   };
   readonly subsetSum: {
     readonly maxSubsetSize: number;
@@ -126,29 +120,21 @@ export class RuleSet {
   }
 
   /**
-   * What this channel's commission may plausibly cost, and what it usually
-   * costs.
+   * What this channel's commission may plausibly cost.
+   *
+   * A guard and a prior: the only band that can reject anything, and the only
+   * one that belongs in configuration. What the channel *usually* charges is
+   * measured per run instead — see `calibrateRates`.
    *
    * Per channel, because a second gateway charges what it charges: sharing one
    * band would mean either widening Wompi's until it stopped discriminating,
-   * or rejecting the new source's perfectly ordinary settlements. Falls back
-   * to the global tolerances, so a channel nobody has measured yet behaves
-   * exactly as before.
-   *
-   * `typical` collapsing onto `admissible` is not a defect: it is what a
-   * channel looks like before anyone has observed it, and it makes the amount
-   * check ungraded rather than wrong.
+   * or rejecting the new source's perfectly ordinary settlements.
    */
-  feeBandsFor(channel: string): {
-    admissible: readonly [number, number];
-    typical: readonly [number, number];
-  } {
-    const declared = this.config.channels[channel]?.deductions;
-    const admissible = declared?.plausibleTotalBand ?? this.config.tolerances.impliedFeeRateBand;
-    const typical =
-      declared?.typicalTotalBand ?? this.config.tolerances.typicalFeeRateBand ?? admissible;
-
-    return { admissible, typical };
+  admissibleFeeBandFor(channel: string): readonly [number, number] {
+    return (
+      this.config.channels[channel]?.deductions?.plausibleTotalBand ??
+      this.config.tolerances.impliedFeeRateBand
+    );
   }
 
   /** True when `counterparty` is the channel we expected to hear from. */
