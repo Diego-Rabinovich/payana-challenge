@@ -1,5 +1,6 @@
 import type { ConfidenceDto, HealthDto, ProposedEntryDto } from '@aa/contracts';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { ConfidenceMeter, EvidenceList, StatusChip } from './Confidence.js';
 import { MoneyFunnel, type FunnelStep } from './MoneyFunnel.js';
@@ -163,6 +164,52 @@ describe('ProposedEntryTable (F05-T05)', () => {
     render(<ProposedEntryTable entry={entry} journalKey="wompi" />);
     expect(screen.getByText(/borrador/)).toBeDefined();
     expect(screen.getByText(/idempotencia/)).toBeDefined();
+  });
+
+  it('cuando el asiento ya existe ofrece deshacerlo, no volver a crearlo', () => {
+    // La marca no vive en este componente: llega del ERP. Por eso sobrevive a
+    // recargar la pantalla y desaparece sola si alguien borra el asiento.
+    render(
+      <MemoryRouter>
+        <ProposedEntryTable
+          entry={entry}
+          journalKey="wompi"
+          written={{
+            ref: entry.ref,
+            entryId: '1554',
+            name: '(borrador sin numerar)',
+            state: 'draft',
+            date: '2026-02-25',
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Creado en borrador')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Deshacer/ })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Crear asiento/ })).toBeNull();
+  });
+
+  it('contabilizado deja de ser nuestro: ni se borra ni se vuelve a crear', () => {
+    render(
+      <MemoryRouter>
+        <ProposedEntryTable
+          entry={entry}
+          journalKey="wompi"
+          written={{
+            ref: entry.ref,
+            entryId: '1554',
+            name: 'BNK8/2026/00041',
+            state: 'posted',
+            date: '2026-02-25',
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Contabilizado/)).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Deshacer/ })).toBeNull();
+    expect(screen.getByText(/Restablecer a borrador/)).toBeDefined();
   });
 });
 
