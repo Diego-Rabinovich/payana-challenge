@@ -1,9 +1,9 @@
-import { AccountDto, LineageDto, MovementDto, MovementPageDto } from '@aa/contracts';
+import { AccountDto, CorrelationDto, LineageDto, MovementDto, MovementPageDto } from '@aa/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { NotFoundError } from '../plugins/error-handler.js';
-import { toAccountDto, toLineageDto, toMovementDto } from '@aa/adapters';
+import { toAccountDto, toCorrelationDto, toLineageDto, toMovementDto } from '@aa/adapters';
 import type { LedgerQueries } from '@aa/core';
 
 /**
@@ -67,6 +67,31 @@ export const ledgerRoutes =
             limit,
           },
         };
+      },
+    );
+
+    app.get(
+      '/correlations',
+      {
+        schema: {
+          tags: ['ledger'],
+          summary: 'Are these two movements related, and why?',
+          description:
+            'The first primitive the brief suggests. Composes the batch, the match and the ' +
+            'pro-rata share; makes no judgement of its own, so the explanation is the match’s ' +
+            'own evidence and cannot disagree with what the reconciliation screen shows.',
+          querystring: z.object({
+            channelMovement: z.string(),
+            bankMovement: z.string(),
+          }),
+          response: { 200: CorrelationDto },
+        },
+      },
+      async (request) => {
+        const { channelMovement, bankMovement } = request.query;
+        const correlation = await ledger.correlationOf(channelMovement, bankMovement);
+        if (!correlation) throw new NotFoundError(`Movimientos ${channelMovement} / ${bankMovement}`);
+        return toCorrelationDto(correlation);
       },
     );
 

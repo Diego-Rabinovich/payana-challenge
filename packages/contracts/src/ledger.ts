@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IsoDate, IsoInstant, MoneyDto, PageDto, SourceRefDto } from './primitives.js';
+import { EvidenceDto, IsoDate, IsoInstant, MoneyDto, PageDto, SourceRefDto } from './primitives.js';
 
 export const MovementTypeDto = z.enum([
   'CHARGE',
@@ -84,3 +84,20 @@ export type MovementDto = z.infer<typeof MovementDto>;
 export type AccountDto = z.infer<typeof AccountDto>;
 export type SettlementBatchDto = z.infer<typeof SettlementBatchDto>;
 export type LineageDto = z.infer<typeof LineageDto>;
+
+/**
+ * The brief's first primitive, on the wire: are these two movements related,
+ * and why? The explanation is the underlying match's own evidence, unchanged.
+ */
+export const CorrelationDto = z.object({
+  verdict: z.enum(['SETTLED_IN', 'SETTLED_ELSEWHERE', 'UNSETTLED', 'UNRELATED']),
+  channelMovementId: z.string(),
+  bankMovementId: z.string(),
+  batchId: z.string().optional(),
+  matchId: z.string().optional(),
+  attributedNet: MoneyDto.optional(),
+  shareOfBatch: z.number().optional(),
+  evidence: z.array(EvidenceDto),
+});
+
+export type CorrelationDto = z.infer<typeof CorrelationDto>;

@@ -175,3 +175,61 @@ describe('a channel that declares nothing', () => {
     ).toThrow(/which day it closes on/);
   });
 });
+
+describe('una fuente con otra comisión no toca a las demás', () => {
+  // Everything a channel needs, as one JSON block. No code accompanies it.
+  const EXPENSIVE = {
+    counterpartyPatterns: ['CARO'],
+    settlement: {
+      cadence: 'DAILY' as const,
+      window: { fromBusinessDays: 2, toBusinessDays: 4 },
+    },
+    deductions: {
+      vat: { numerator: 19, denominator: 100 },
+      withholding: { numerator: 15, denominator: 1000 },
+      // Charges far more than Wompi: 9% to 11%, usually 9,5% to 10%.
+      plausibleTotalBand: [0.09, 0.11] as const,
+      typicalTotalBand: [0.095, 0.1] as const,
+      truncationSlackPerCharge: 3,
+    },
+  };
+
+  const ruleSet = RuleSet.from({
+    ...TEST_RULESET_CONFIG,
+    channels: { ...TEST_RULESET_CONFIG.channels, caro: EXPENSIVE },
+  });
+
+  it('cada canal juzga contra su propia banda', () => {
+    expect(ruleSet.feeBandsFor('wompi').typical).toEqual([0.0425, 0.0445]);
+    expect(ruleSet.feeBandsFor('caro').typical).toEqual([0.095, 0.1]);
+
+    // And neither leaks into the other: a 10% gap is normal for one and
+    // inadmissible for the other, which is the entire point.
+    const [wompiLow, wompiHigh] = ruleSet.feeBandsFor('wompi').admissible;
+    expect(0.1 >= wompiLow && 0.1 <= wompiHigh).toBe(false);
+
+    const [caroLow, caroHigh] = ruleSet.feeBandsFor('caro').admissible;
+    expect(0.1 >= caroLow && 0.1 <= caroHigh).toBe(true);
+    expect(0.043 >= caroLow && 0.043 <= caroHigh).toBe(false);
+  });
+
+  it('una fuente sin declarar nada cae en el default ancho, no en el de otro', () => {
+    // `pos` declares only its descriptor patterns. It must not inherit the
+    // band someone measured for Wompi — that would be one gateway deciding
+    // what another is allowed to charge.
+    expect(ruleSet.feeBandsFor('pos').admissible).toEqual(
+      TEST_RULESET_CONFIG.tolerances.impliedFeeRateBand,
+    );
+    // With nothing observed, the check is ungraded rather than wrong: the
+    // typical band collapses onto the admissible one.
+    expect(ruleSet.feeBandsFor('pos').typical).toEqual(ruleSet.feeBandsFor('pos').admissible);
+  });
+
+  it('la ventana de liquidación también es del canal', () => {
+    expect(ruleSet.settlementPolicyFor('caro').window).toEqual({
+      fromBusinessDays: 2,
+      toBusinessDays: 4,
+    });
+    expect(ruleSet.settlementPolicyFor('wompi').window.fromBusinessDays).toBe(1);
+  });
+});

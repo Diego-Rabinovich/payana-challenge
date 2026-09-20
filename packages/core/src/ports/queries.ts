@@ -5,6 +5,7 @@ import type { ErpReconciliationReport } from '../domain/erp-reconciliation.js';
 import type { MatchResult, ReconciliationReport } from '../domain/match-result.js';
 import type { Movement } from '../domain/movement.js';
 import type { SettlementBatch } from '../domain/settlement-batch.js';
+import type { Correlation } from '../usecases/correlate.js';
 import type { Lineage } from '../usecases/trace-movement.js';
 
 /**
@@ -50,6 +51,14 @@ export interface LedgerQueries {
     limit: number;
   }): Promise<Page<Movement>>;
   findMovement(movementId: string): Promise<Movement | undefined>;
+  /**
+   * The brief's first primitive: are these two movements related, and why?
+   * Undefined when either id does not exist.
+   */
+  correlationOf(
+    channelMovementId: string,
+    bankMovementId: string,
+  ): Promise<Correlation | undefined>;
   /** Several at once, for a screen that has a list of ids and needs the rows. */
   findMovements(ids: readonly string[]): Promise<readonly Movement[]>;
   lineageOf(movementId: string): Promise<Lineage | undefined>;
@@ -95,6 +104,44 @@ export interface SourceStatus {
   readonly asOf?: string;
 }
 
+/**
+ * What the last run observed about a channel's commission.
+ *
+ * Calibration is a reading, not an action. There is nothing to press: once a
+ * run exists, the implied rates are simply there to be looked at, and the
+ * question the screen answers is whether the band in config still describes
+ * them. A channel whose source states its own deductions has no calibration at
+ * all, and says so rather than showing an empty chart.
+ */
+export interface ChannelCalibration {
+  readonly settlements: number;
+  readonly deductionsAreReported: boolean;
+  /** Implied total deduction rates, ascending. Empty when reported. */
+  readonly observedRates: readonly number[];
+  readonly median?: number;
+  readonly deviation?: number;
+  /** Median ± one deviation: what the typical band would be if measured now. */
+  readonly suggestedTypicalBand?: readonly [number, number];
+  readonly insideTypical: number;
+  readonly insideAdmissible: number;
+}
+
+export interface ChannelView {
+  readonly key: string;
+  readonly counterpartyPatterns: readonly string[];
+  readonly cadence: string;
+  readonly cutoff?: string;
+  readonly window: { readonly fromBusinessDays: number; readonly toBusinessDays: number };
+  readonly admissibleBand: readonly [number, number];
+  readonly typicalBand: readonly [number, number];
+  readonly declaresOwnBand: boolean;
+  readonly calibration: ChannelCalibration;
+}
+
+export interface ChannelQueries {
+  list(runId?: string): Promise<readonly ChannelView[]>;
+}
+
 /** A bank statement sitting in the inbox, whether or not a run has read it. */
 export interface StatementFile {
   readonly name: string;
@@ -133,5 +180,6 @@ export interface ReadModel {
   readonly erp: ErpQueries;
   readonly runs: RunQueries;
   readonly statements: StatementQueries;
+  readonly channels: ChannelQueries;
   readonly health: HealthQueries;
 }

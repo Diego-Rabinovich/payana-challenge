@@ -7,8 +7,7 @@ export const TEST_RULESET_CONFIG: RuleSetConfig = {
   tolerances: {
     roundingCents: 10_000,
     identityCents: 1,
-    impliedFeeRateBand: [0.02, 0.05],
-    typicalFeeRateBand: [0.0425, 0.0445],
+    impliedFeeRateBand: [0.02, 0.08],
   },
   weights: {
     AMOUNT_EXACT: 50,
@@ -36,7 +35,16 @@ export const TEST_RULESET_CONFIG: RuleSetConfig = {
     maxNodes: 200_000,
   },
   channels: {
-    wompi: { counterpartyPatterns: ['WOMPI'] },
+    wompi: {
+      counterpartyPatterns: ['WOMPI'],
+      deductions: {
+        vat: { numerator: 19, denominator: 100 },
+        withholding: { numerator: 15, denominator: 1000 },
+        plausibleTotalBand: [0.04, 0.05],
+        typicalTotalBand: [0.0425, 0.0445],
+        truncationSlackPerCharge: 3,
+      },
+    },
     druo: { counterpartyPatterns: ['DRUO'] },
   },
 };

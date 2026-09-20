@@ -46,7 +46,7 @@ export class SplitSettlementRule implements MatchingRule {
     const { subsetSum } = context.ruleSet.config;
     // The same target the scheduled rule would accept a single credit against,
     // so the two rules cannot disagree about what "the right amount" means.
-    const { targetCents, toleranceCents } = expectedTotal(batch, context.ruleSet);
+    const { targetCents, toleranceCents } = expectedTotal(batch, context.ruleSet, context.channel);
     const result = findSubsets(
       eligible.map((deposit) => deposit.amount.cents),
       {
@@ -64,15 +64,22 @@ export class SplitSettlementRule implements MatchingRule {
       return [this.exhausted(batch, eligible, result.nodesVisited)];
     }
 
-    return result.solutions
-      .filter((indices) => indices.length > 1)
-      .map((indices) => this.assess(batch, indices.map((index) => eligible[index]!), context));
+    const viable = result.solutions.filter((indices) => indices.length > 1);
+
+    // Several different subsets adding to the same target is the ambiguity the
+    // brief warns about, and it is a property of the set of solutions rather
+    // than of any one of them. Every candidate carries it, so whichever one
+    // the assignment picks still says out loud that others existed.
+    return viable.map((indices) =>
+      this.assess(batch, indices.map((index) => eligible[index]!), context, viable.length),
+    );
   }
 
   private assess(
     batch: SettlementBatch,
     deposits: readonly Movement[],
     { calendar, ruleSet, channel, policy }: MatchingContext,
+    solutions = 1,
   ): Candidate {
     const total = Money.sum(deposits.map((deposit) => deposit.amount));
     const amounts = describeAmounts(batch, total);
@@ -81,7 +88,7 @@ export class SplitSettlementRule implements MatchingRule {
       deposits,
       amounts,
       evidence: [
-        amountEvidence(batch, amounts, ruleSet),
+        amountEvidence(batch, amounts, ruleSet, channel),
         dateEvidence(batch, deposits, calendar, policy),
         descriptorEvidence(deposits, ruleSet, channel),
         identityEvidence(batch, ruleSet),
@@ -92,6 +99,16 @@ export class SplitSettlementRule implements MatchingRule {
             .map((deposit) => `${deposit.valueDate.toString()} ${deposit.amount.toString()}`)
             .join(' + '),
         }),
+        ...(solutions > 1
+          ? [
+              evidence('SUBSET_SUM_MULTIPLE', 'AMOUNT', false, {
+                expected: 'una sola combinación posible',
+                observed: `${solutions} combinaciones distintas suman lo mismo`,
+                detail:
+                  'la aritmética no alcanza para elegir entre ellas; hace falta mirar el extracto',
+              }),
+            ]
+          : []),
       ],
     };
   }

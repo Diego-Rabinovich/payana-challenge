@@ -125,6 +125,32 @@ export class RuleSet {
     return this.config.channels[channel]?.deductions ?? COLOMBIAN_RATES;
   }
 
+  /**
+   * What this channel's commission may plausibly cost, and what it usually
+   * costs.
+   *
+   * Per channel, because a second gateway charges what it charges: sharing one
+   * band would mean either widening Wompi's until it stopped discriminating,
+   * or rejecting the new source's perfectly ordinary settlements. Falls back
+   * to the global tolerances, so a channel nobody has measured yet behaves
+   * exactly as before.
+   *
+   * `typical` collapsing onto `admissible` is not a defect: it is what a
+   * channel looks like before anyone has observed it, and it makes the amount
+   * check ungraded rather than wrong.
+   */
+  feeBandsFor(channel: string): {
+    admissible: readonly [number, number];
+    typical: readonly [number, number];
+  } {
+    const declared = this.config.channels[channel]?.deductions;
+    const admissible = declared?.plausibleTotalBand ?? this.config.tolerances.impliedFeeRateBand;
+    const typical =
+      declared?.typicalTotalBand ?? this.config.tolerances.typicalFeeRateBand ?? admissible;
+
+    return { admissible, typical };
+  }
+
   /** True when `counterparty` is the channel we expected to hear from. */
   isChannelCounterparty(channel: string, counterparty: string | undefined): boolean {
     if (counterparty === undefined) return false;

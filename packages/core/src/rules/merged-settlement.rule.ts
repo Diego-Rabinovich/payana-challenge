@@ -55,8 +55,8 @@ export class MergedSettlementRule implements MatchingRule {
 
     for (const other of neighbours) {
       const combined = batch.gross.plus(other.gross);
-      const { toleranceCents } = expectedTotal(batch, context.ruleSet);
-      const [low, high] = context.ruleSet.config.tolerances.impliedFeeRateBand;
+      const { toleranceCents } = expectedTotal(batch, context.ruleSet, context.channel);
+      const [low, high] = context.ruleSet.feeBandsFor(context.channel).admissible;
 
       for (const deposit of reachable) {
         const rate = 1 - deposit.amount.cents / combined.cents;

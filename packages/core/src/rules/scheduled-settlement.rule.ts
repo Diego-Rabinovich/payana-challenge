@@ -51,7 +51,7 @@ export class ScheduledSettlementRule implements MatchingRule {
       deposits,
       amounts,
       evidence: [
-        amountEvidence(batch, amounts, ruleSet),
+        amountEvidence(batch, amounts, ruleSet, channel),
         dateEvidence(batch, deposits, calendar, policy),
         descriptorEvidence(deposits, ruleSet, channel),
         identityEvidence(batch, ruleSet),

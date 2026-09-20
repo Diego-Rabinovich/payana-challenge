@@ -9,6 +9,7 @@ import { Ledger } from './screens/Ledger.js';
 import { Lineage } from './screens/Lineage.js';
 import { NewRun } from './screens/NewRun.js';
 import { Reconciliation } from './screens/Reconciliation.js';
+import { Sources } from './screens/Sources.js';
 import { Unattributed } from './screens/Unattributed.js';
 
 /**
@@ -26,6 +27,7 @@ const SECTIONS = [
   { to: '/erp/wompi', label: 'ERP · Wompi' },
   { to: '/erp/bancolombia', label: 'ERP · Bancolombia' },
   { to: '/ledger', label: 'Ledger' },
+  { to: '/fuentes', label: 'Fuentes' },
   { to: '/corrida', label: 'Nueva corrida' },
   { to: '/glosario', label: 'Glosario' },
 ];
@@ -62,6 +64,7 @@ export function App() {
           <Route path="/corrida" element={<NewRun />} />
           <Route path="/ledger" element={<Ledger />} />
           <Route path="/glosario" element={<Glossary />} />
+          <Route path="/fuentes" element={<Sources />} />
           <Route path="/movimientos/:movementId" element={<Lineage />} />
           <Route path="/erp/:journalKey" element={<ErpReconciliation />} />
           {/* Old links keep working rather than dead-ending on the panel. */}

@@ -12,9 +12,11 @@ import {
   buildSettlementBatches,
   movementId as asMovementId,
   runId as asRunId,
+  correlate,
   traceMovement,
 } from '@aa/core';
 import { reviveErpReport, reviveFlowReport } from './persistence/revive.js';
+import { describeChannel } from './presentation/channel-calibration.js';
 import { renderMarkdown } from './presentation/markdown-report.js';
 import { listStatements, saveStatement } from './fs/statement-inbox.js';
 import type { Dependencies } from './composition.js';
@@ -94,6 +96,29 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
 
       findMovement: (movementId) => repositories.movements.findById(asMovementId(movementId)),
 
+      correlationOf: async (channelMovementId, bankMovementId) => {
+        const [charge, credit] = await Promise.all([
+          repositories.movements.findById(asMovementId(channelMovementId)),
+          repositories.movements.findById(asMovementId(bankMovementId)),
+        ]);
+        if (!charge || !credit) return undefined;
+
+        const batch = (await currentBatches()).find((candidate) =>
+          candidate.chargeIds.includes(charge.id),
+        );
+        const match = batch
+          ? (await latestFlow())?.matches.find((m) => m.left.batchId === batch.id)
+          : undefined;
+
+        return correlate({
+          charge,
+          credit,
+          charges: batch ? await chargesOf(batch) : [],
+          ...(batch ? { batch } : {}),
+          ...(match ? { match } : {}),
+        });
+      },
+
       findMovements: async (ids) => {
         const found = await Promise.all(
           ids.map((id) => repositories.movements.findById(asMovementId(id))),
@@ -130,6 +155,16 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       erpReconciliation: async ({ journalKey }) => {
         const stored = await repositories.reports.latest<unknown>('erp', journalKey);
         return stored ? reviveErpReport(stored) : undefined;
+      },
+    },
+
+    channels: {
+      list: async (runId) => {
+        const report = await latestFlow();
+        void runId;
+        return ruleSet.channelKeys.map((key) =>
+          describeChannel(key, ruleSet, key === 'wompi' ? (report?.matches ?? []) : []),
+        );
       },
     },
 

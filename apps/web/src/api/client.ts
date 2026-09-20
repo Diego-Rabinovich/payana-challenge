@@ -1,5 +1,6 @@
 import type {
   AccountDto,
+  ChannelDto,
   ErpReconciliationDto,
   HealthDto,
   LineageDto,
@@ -80,6 +81,9 @@ export const api = {
     get<ReconciliationSummaryDto>(`/reconciliation-summary${query({ runId })}`),
 
   accounts: () => get<{ accounts: AccountDto[] }>('/accounts'),
+
+  /** Connected sources, their settings, and what the last run observed. */
+  channels: () => get<{ channels: ChannelDto[] }>('/channels'),
 
   movements: (accountId: string, params: Window = {}) =>
     get<{ movements: MovementDto[]; page: OffsetPageDto & { nextCursor: string | null } }>(

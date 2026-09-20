@@ -184,6 +184,7 @@ export function stubReadModel(): ReadModel {
     ledger: {
       listAccounts: async () => [],
       listMovements: async () => ({ items: [movement], nextCursor: null, total: 1 }),
+      correlationOf: async () => undefined,
       findMovements: async (ids) =>
         ids.includes(movement.id) ? [movement] : [],
       findMovement: async (id) => (id === movement.id ? movement : undefined),
@@ -231,6 +232,10 @@ export function stubReadModel(): ReadModel {
     erp: {
       erpReconciliation: async ({ journalKey }) =>
         journalKey === 'wompi' ? ERP_REPORT : undefined,
+    },
+
+    channels: {
+      list: async () => [],
     },
 
     statements: {

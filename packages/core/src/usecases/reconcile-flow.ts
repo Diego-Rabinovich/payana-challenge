@@ -161,15 +161,7 @@ export class ReconcileFlow {
       ...(input.runId ? { runId: input.runId } : {}),
       rulesetVersion: this.ruleSet.version,
       kind: 'CHANNEL_TO_BANK',
-      // A batch nobody could attribute is not automatically a dead end. When a
-      // rule found a plausible account of where the money went but could not
-      // claim it, that is ambiguity, and reporting it as UNMATCHED would say
-      // we know nothing when in fact we know a great deal.
-      status: winner
-        ? (confidence.band as MatchStatus)
-        : explained(assignment)
-          ? 'AMBIGUOUS'
-          : 'UNMATCHED',
+      status: winner ? (confidence.band as MatchStatus) : 'UNMATCHED',
       left: { batchId: batch.id, batchDate: batch.batchDate, chargeIds: batch.chargeIds },
       right: winner ? { movementIds: depositIdsOf(winner) } : null,
       rule: { id: rule?.id ?? 'NONE', version: rule?.version ?? 0 },
@@ -265,11 +257,6 @@ export class ReconcileFlow {
           : evidence('DESCRIPTOR_FOREIGN', 'DESCRIPTOR', false).code,
       }));
   }
-}
-
-/** True when something in the evidence accounts for the money after all. */
-function explained(assignment: BatchAssignment): boolean {
-  return assignment.confidence.components.some((item) => item.code === 'SETTLEMENT_MERGED');
 }
 
 /** The derivation is a claim about the money, so it travels as evidence. */

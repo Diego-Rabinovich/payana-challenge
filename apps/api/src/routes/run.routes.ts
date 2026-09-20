@@ -3,6 +3,7 @@ import {
   EVIDENCE_CODES,
   EVIDENCE_DIMENSIONS,
   type EvidenceCode,
+  ChannelDto,
   HealthDto,
   RubricDto,
   RunDto,
@@ -14,6 +15,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { NotFoundError, RejectedError } from '../plugins/error-handler.js';
 import type { ReadModel } from '@aa/core';
+import { toChannelDto } from '@aa/adapters';
 import { attainableScore } from '@aa/core';
 
 export const runRoutes =
@@ -113,6 +115,21 @@ export const runRoutes =
               : 'application/json';
         return reply.type(contentType).send(artifact);
       },
+    );
+
+    app.get(
+      '/channels',
+      {
+        schema: {
+          tags: ['meta'],
+          summary: 'Connected sources: how each one settles, and what the last run observed',
+          querystring: z.object({ runId: z.string().optional() }),
+          response: { 200: z.object({ channels: z.array(ChannelDto) }) },
+        },
+      },
+      async (request) => ({
+        channels: (await deps.channels.list(request.query.runId)).map(toChannelDto),
+      }),
     );
 
     app.get(

@@ -10,15 +10,10 @@
     "roundingCents": 10000,
     "identityCents": 1,
     "impliedFeeRateBand": [
-      0.04,
-      0.05
+      0.02,
+      0.08
     ],
-    "typicalFeeRateBand": [
-      0.0425,
-      0.0445
-    ],
-    "typicalFeeRateNotes": "Measured, not chosen: across the 53 settlements of Jan-Apr 2026 the implied deduction rate has a median of 4.361% and a standard deviation of 0.090 points. This is that centre plus or minus one deviation, and it contains 41 of the 53. Outside it the gap is still plausible, which is what impliedFeeRateBand is for, but it is no longer typical and the score says so.",
-    "impliedFeeRateNotes": "The admissibility band, and a gate: outside it the difference between the gross and the credit cannot be a commission, so AMOUNT_MISMATCH fires and the candidate is discarded. It comes from the statutory structure rather than from fitting. Retencion en la fuente is a flat 1.5% by law and is always present; the rest is the gateway commission plus 19% VAT on it, so a commission between 2.1% and 2.95% produces a total between 4% and 5%. Measured afterwards against Jan-Apr 2026 the observed totals run 4.299% to 4.687% — implied commissions of 2.35% to 2.68% — which leaves about 0.30 points of margin at each edge. Kept as it was; the data supports it."
+    "bandNotes": "The default for a channel that declares no deductions of its own: wide, because nothing is known about it yet. A channel that has been observed narrows it in its own block, which is what keeps one gateway from deciding what another may charge."
   },
   "weights": {
     "AMOUNT_EXACT": 50,
@@ -72,7 +67,26 @@
           "toBusinessDays": 3
         }
       },
-      "cutoffNotes": "Fitted against Jan-Apr 2026, not documented by Wompi. A sweep from 14:00 to midnight peaks sharply at 21:00 Bogota: 50 of 56 batches then close against the bank within the statutory 3-6% deduction band, versus 36 of 54 assuming midnight. Re-fit it if the gateway changes; it is one number in one file precisely so that is cheap."
+      "cutoffNotes": "Fitted against Jan-Apr 2026, not documented by Wompi. A sweep from 14:00 to midnight peaks sharply at 21:00 Bogota: 50 of 56 batches then close against the bank within the statutory 3-6% deduction band, versus 36 of 54 assuming midnight. Re-fit it if the gateway changes; it is one number in one file precisely so that is cheap.",
+      "deductions": {
+        "vat": {
+          "numerator": 19,
+          "denominator": 100
+        },
+        "withholding": {
+          "numerator": 15,
+          "denominator": 1000
+        },
+        "plausibleTotalBand": [
+          0.04,
+          0.05
+        ],
+        "typicalTotalBand": [
+          0.0425,
+          0.0445
+        ],
+        "truncationSlackPerCharge": 3
+      }
     },
     "pos": {
       "counterpartyPatterns": [

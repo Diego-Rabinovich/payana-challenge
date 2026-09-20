@@ -129,6 +129,7 @@ export function stubDependencies(): ReadModel {
         nextCursor: null,
         total: 1,
       }),
+      correlationOf: async () => undefined,
       findMovements: async (ids) =>
         ids.includes('mov_a1b2c3d4e5f60718') ? [testMovement()] : [],
       findMovement: async (id) => (id === 'mov_a1b2c3d4e5f60718' ? testMovement() : undefined),
@@ -147,6 +148,10 @@ export function stubDependencies(): ReadModel {
       erpReconciliation: async () => {
         throw new NotFoundError('ERP reconciliation');
       },
+    },
+
+    channels: {
+      list: async () => [],
     },
 
     statements: {

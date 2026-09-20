@@ -122,3 +122,40 @@ export type StatementFileDto = z.infer<typeof StatementFileDto>;
 export type UploadStatementDto = z.infer<typeof UploadStatementDto>;
 export type RubricDto = z.infer<typeof RubricDto>;
 export type EvidenceCodeInfoDto = z.infer<typeof EvidenceCodeInfoDto>;
+
+/** A rate as a fraction: 0.0431 is 4,31%. */
+const RateDto = z.number().min(0).max(1);
+
+/**
+ * What the last run observed about a channel's commission, next to what the
+ * config declares. A reading, not a procedure — see channel-calibration.ts.
+ */
+export const ChannelCalibrationDto = z.object({
+  settlements: z.number().int(),
+  deductionsAreReported: z
+    .boolean()
+    .describe('True when the source states its own deductions, so nothing had to be implied'),
+  observedRates: z.array(RateDto),
+  median: RateDto.optional(),
+  deviation: z.number().optional(),
+  suggestedTypicalBand: z.tuple([RateDto, RateDto]).optional(),
+  insideTypical: z.number().int(),
+  insideAdmissible: z.number().int(),
+});
+
+export const ChannelDto = z.object({
+  key: z.string(),
+  counterpartyPatterns: z.array(z.string()),
+  cadence: z.string(),
+  cutoff: z.string().optional(),
+  window: z.object({ fromBusinessDays: z.number().int(), toBusinessDays: z.number().int() }),
+  admissibleBand: z.tuple([RateDto, RateDto]),
+  typicalBand: z.tuple([RateDto, RateDto]),
+  declaresOwnBand: z
+    .boolean()
+    .describe('False when the channel is falling back on the global default'),
+  calibration: ChannelCalibrationDto,
+});
+
+export type ChannelDto = z.infer<typeof ChannelDto>;
+export type ChannelCalibrationDto = z.infer<typeof ChannelCalibrationDto>;

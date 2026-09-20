@@ -74,6 +74,7 @@ export function windowFor(
 export function expectedTotal(
   batch: SettlementBatch,
   ruleSet: RuleSet,
+  channel: string,
 ): { targetCents: number; toleranceCents: number } {
   if (batch.deductions.length > 0) {
     return {
@@ -82,7 +83,7 @@ export function expectedTotal(
     };
   }
 
-  const [low, high] = ruleSet.config.tolerances.impliedFeeRateBand;
+  const [low, high] = ruleSet.feeBandsFor(channel).admissible;
   const midpoint = (low + high) / 2;
   return {
     targetCents: Math.round(batch.gross.cents * (1 - midpoint)),
@@ -115,6 +116,7 @@ export function amountEvidence(
   batch: SettlementBatch,
   amounts: MatchAmounts,
   ruleSet: RuleSet,
+  channel: string,
 ): Evidence {
   const delta = amounts.delta ?? Money.zero();
   const context = {
@@ -140,9 +142,9 @@ export function amountEvidence(
   // settlements on exactly the same score.
   const reportedNothing = batch.deductions.length === 0;
   const rate = amounts.impliedDeductionRate ?? Number.NaN;
-  const [low, high] = ruleSet.config.tolerances.impliedFeeRateBand;
-  const [usualLow, usualHigh] =
-    ruleSet.config.tolerances.typicalFeeRateBand ?? [low, high];
+  const { admissible, typical } = ruleSet.feeBandsFor(channel);
+  const [low, high] = admissible;
+  const [usualLow, usualHigh] = typical;
 
   if (reportedNothing && rate >= low && rate <= high) {
     const gap = amounts.gross.minus(amounts.observedNet ?? Money.zero());

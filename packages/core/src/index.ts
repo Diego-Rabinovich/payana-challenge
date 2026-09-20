@@ -41,4 +41,5 @@ export * from './rules/split-settlement.rule.js';
 export * from './usecases/ingest-source.js';
 export * from './usecases/reconcile-erp.js';
 export * from './usecases/reconcile-flow.js';
+export * from './usecases/correlate.js';
 export * from './usecases/trace-movement.js';

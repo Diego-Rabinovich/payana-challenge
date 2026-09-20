@@ -1,6 +1,13 @@
-import type { AccountDto, LineageDto, MovementDto, SettlementBatchDto } from '@aa/contracts';
-import type { Account, Lineage, Movement, SettlementBatch } from '@aa/core';
+import type {
+  AccountDto,
+  CorrelationDto,
+  LineageDto,
+  MovementDto,
+  SettlementBatchDto,
+} from '@aa/contracts';
+import type { Account, Correlation, Lineage, Movement, SettlementBatch } from '@aa/core';
 import { toMoneyDto } from './money.presenter.js';
+import { toEvidenceDto } from './reconciliation.presenter.js';
 
 /**
  * Domain to DTO, written out by hand.
@@ -73,5 +80,18 @@ export function toLineageDto(lineage: Lineage): LineageDto {
       amount: toMoneyDto(step.amount),
       detail: step.detail,
     })),
+  };
+}
+
+export function toCorrelationDto(correlation: Correlation): CorrelationDto {
+  return {
+    verdict: correlation.verdict,
+    channelMovementId: correlation.channelMovementId,
+    bankMovementId: correlation.bankMovementId,
+    ...(correlation.batchId ? { batchId: correlation.batchId } : {}),
+    ...(correlation.matchId ? { matchId: correlation.matchId } : {}),
+    ...(correlation.attributedNet ? { attributedNet: toMoneyDto(correlation.attributedNet) } : {}),
+    ...(correlation.shareOfBatch !== undefined ? { shareOfBatch: correlation.shareOfBatch } : {}),
+    evidence: correlation.evidence.map(toEvidenceDto),
   };
 }
