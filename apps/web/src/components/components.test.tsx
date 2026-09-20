@@ -137,25 +137,32 @@ describe('ProposedEntryTable (F05-T05)', () => {
   };
 
   it('shows the proposal as a balanced double entry', () => {
-    render(<ProposedEntryTable entry={entry} writeEnabled={false} />);
+    render(<ProposedEntryTable entry={entry} journalKey="wompi" />);
     expect(screen.getByText('Cuadra')).toBeDefined();
   });
 
-  it('disables the write action and explains why', () => {
-    render(<ProposedEntryTable entry={entry} writeEnabled={false} />);
-
-    expect(screen.getByRole('button', { name: /Crear asiento/ }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText(/ODOO_WRITE_ENABLED=false/)).toBeDefined();
-  });
-
-  it('enables it when the backend says writing is allowed', () => {
-    render(<ProposedEntryTable entry={entry} writeEnabled />);
-    expect(screen.getByRole('button', { name: /Crear asiento/ }).hasAttribute('disabled')).toBe(false);
-  });
-
   it('names the concepts the existing entry omits', () => {
-    render(<ProposedEntryTable entry={entry} writeEnabled={false} />);
+    render(<ProposedEntryTable entry={entry} journalKey="wompi" />);
     expect(screen.getByText(/FEE, TAX, WITHHOLDING/)).toBeDefined();
+  });
+
+  it('refuses to offer the write when the entry does not balance', () => {
+    // Odoo lo rechazaría igual, pero un botón que se puede apretar y siempre
+    // falla enseña a la gente a ignorar los errores.
+    const roto: ProposedEntryDto = {
+      ...entry,
+      lines: [{ ...entry.lines[0]!, debit: money(1) }, ...entry.lines.slice(1)],
+    };
+
+    render(<ProposedEntryTable entry={roto} journalKey="wompi" />);
+    expect(screen.getByText('No cuadra')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Crear asiento/ }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('dice que el asiento va en borrador, porque eso es lo que lo hace reversible', () => {
+    render(<ProposedEntryTable entry={entry} journalKey="wompi" />);
+    expect(screen.getByText(/borrador/)).toBeDefined();
+    expect(screen.getByText(/idempotencia/)).toBeDefined();
   });
 });
 
