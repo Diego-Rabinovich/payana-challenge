@@ -36,7 +36,7 @@ No phase is finished without all of this:
 - [ ] `make check` passes: lint + `dependency-cruiser` + typecheck + tests.
 - [ ] Every business rule in the phase has at least one test proving it and one proving its negative case.
 - [ ] The phase runs under **`SOURCE_MODE=fixtures`**, with no credentials and no network.
-- [ ] Any new data entering the repo went through the PII scrub (ADR-0012).
+- [ ] Any new data entering the repo went through the PII scrub.
 - [ ] New assumptions are written down: an ADR if structural, section 10 of the spec if a doubt.
 - [ ] No `TODO`, `any` or `@ts-ignore` without a comment explaining why.
 

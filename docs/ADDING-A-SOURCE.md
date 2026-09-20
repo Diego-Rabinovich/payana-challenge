@@ -15,7 +15,7 @@ Almost every new source **reuses an existing transport** and contributes only a 
 
 ### 1. Get a sample and anonymise it
 
-Put the raw file in `data/raw/` (gitignored) and run it through the scrubber before it reaches `data/fixtures/`. Amounts and dates are preserved untouched: they are what the system reconciles. See [ADR-0012](adr/0012-live-credentials.md).
+Put the raw file in `data/raw/` (gitignored) and run it through the scrubber before it reaches `data/fixtures/`. Amounts and dates are preserved untouched: they are what the system reconciles.
 
 ### 2. Write the parser
 

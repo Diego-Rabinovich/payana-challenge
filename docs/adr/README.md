@@ -17,5 +17,4 @@ An ADR is not edited when we change our mind: it is marked **Superseded by** and
 | [0009](0009-fail-closed-parsers.md) | Fail closed: a parse that breaks an invariant is rejected | Accepted |
 | [0010](0010-frontend-backend-boundary.md) | Front/back boundary: shared `contracts` package, not codegen | Accepted |
 | [0011](0011-package-structure.md) | Three packages; `core` with a single dependency | Accepted |
-| [0012](0012-live-credentials.md) | Live credentials: what we connect to and what we protect | Accepted |
 | [0013](0013-deriving-deductions.md) | Deriving the gateway's deductions from the gap | Accepted |

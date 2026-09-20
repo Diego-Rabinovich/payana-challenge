@@ -81,7 +81,7 @@ The pipeline is written **once**. Every new source is adapters, not changes here
 | `WompiEventParser` | webhook | JSON | `transaction.updated` plus SHA-256 checksum validation |
 | `WompiSettlementParser` | SFTP or file | CSV | Settlement report → `PAYOUT` movements. **Conditional on Q1.3** |
 
-> Do not change the panel's *Events URL*. It points at `api.prod.payana.cloud`, Payana's live integration. The webhook adapter is demonstrated with recorded payloads against a local endpoint. See ADR-0012.
+> Do not change the panel's *Events URL*. It points at `api.prod.payana.cloud`, Payana's live integration. The webhook adapter is demonstrated with recorded payloads against a local endpoint.
 
 ### 4.6 The Bancolombia parser in detail
 

@@ -41,7 +41,7 @@
       },
       "parser": "wompi-event",
       "cadence": "realtime",
-      "note": "Demonstrates the push transport. Driven by recorded payloads: the panel's events URL points at Payana's live integration and must not be repointed. See ADR-0012."
+      "note": "Demonstrates the push transport. Driven by recorded payloads: the panel's events URL points at Payana's live integration and must not be repointed."
     },
     {
       "id": "odoo:journal-48",
