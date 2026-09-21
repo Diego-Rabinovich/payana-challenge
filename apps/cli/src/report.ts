@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { renderMarkdown } from '@aa/adapters';
-import type { ReadModel } from '@aa/core';
+import { LATEST_RUN, type ReadModel } from '@aa/core';
 
 /**
  * Deliverable 9: the system's output over the provided data.
@@ -11,8 +11,16 @@ import type { ReadModel } from '@aa/core';
  * the engine emitted, so the report and the screen cannot disagree about what
  * a conclusion says. See ADR-0007.
  */
-export async function writeReport(readModel: ReadModel, outDir: string): Promise<string[]> {
-  const report = await readModel.flow.flowReport();
+export async function writeReport(
+  readModel: ReadModel,
+  outDir: string,
+  /** Cuál. Por defecto la última, dicho por su nombre en vez de por omisión. */
+  runId = LATEST_RUN,
+): Promise<string[]> {
+  const resolved = await readModel.runs.resolve(runId);
+  if (!resolved) return [];
+
+  const report = await readModel.flow.flowReport(resolved);
   if (!report) return [];
 
   await mkdir(outDir, { recursive: true });

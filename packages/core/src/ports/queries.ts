@@ -66,25 +66,49 @@ export interface LedgerQueries {
   lineageOf(movementId: string): Promise<Lineage | undefined>;
 }
 
+/**
+ * Todo lo de acá es la conclusión de una corrida, así que todo pide cuál.
+ *
+ * El `runId` era opcional y ausente significaba «la más reciente». Eso hacía
+ * que un id de match —que es estable entre corridas a propósito, para que un
+ * rerun actualice en vez de duplicar— no identificara un resultado sino una
+ * familia de resultados, desambiguada por cuál corrió último. Un detalle
+ * guardado en una corrida vieja daba 404 mientras la lista de esa misma
+ * corrida lo mostraba.
+ *
+ * Quien quiera «la última» pide `latest` y `RunQueries.resolve` le devuelve el
+ * id concreto, que después viaja en la respuesta. Lo implícito se volvió
+ * explícito sin perder el atajo.
+ */
 export interface FlowQueries {
-  listBatches(runId?: string): Promise<readonly SettlementBatch[]>;
-  findBatch(batchId: string): Promise<SettlementBatch | undefined>;
-  listReconciliations(input: { runId?: string; status?: string }): Promise<readonly MatchResult[]>;
-  findReconciliation(matchId: string): Promise<MatchResult | undefined>;
-  flowReport(runId?: string): Promise<ReconciliationReport | undefined>;
+  listBatches(runId: string): Promise<readonly SettlementBatch[]>;
+  findBatch(runId: string, batchId: string): Promise<SettlementBatch | undefined>;
+  listReconciliations(input: { runId: string; status?: string }): Promise<readonly MatchResult[]>;
+  findReconciliation(runId: string, matchId: string): Promise<MatchResult | undefined>;
+  flowReport(runId: string): Promise<ReconciliationReport | undefined>;
 }
 
 export interface ErpQueries {
   erpReconciliation(input: {
     journalKey: string;
-    runId?: string;
+    runId: string;
     status?: string;
   }): Promise<ErpReconciliationReport | undefined>;
 }
 
+export const LATEST_RUN = 'latest';
+
 export interface RunQueries {
   list(limit: number): Promise<readonly RunRecord[]>;
   find(runId: string): Promise<RunRecord | undefined>;
+  /**
+   * Convierte lo que pidió el cliente en un id concreto.
+   *
+   * `latest` se resuelve a la corrida más reciente; cualquier otra cosa se
+   * devuelve sólo si esa corrida existe. Undefined significa 404, que es mejor
+   * que contestar con los números de otra corrida.
+   */
+  resolve(runId: string): Promise<string | undefined>;
   /** Triggers a run. Returns the created record; the route decides the status code. */
   start(input: { from: string; to: string; sources?: readonly string[] }): Promise<RunRecord>;
   reportArtifact(runId: string, format: 'md' | 'json' | 'ndjson'): Promise<string | undefined>;
@@ -139,7 +163,7 @@ export interface ChannelView {
  */
 export interface CorrectionWrites {
   /** Crea en borrador la corrección de esa línea. Devuelve el id de Odoo. */
-  create(input: { journalKey: string; ref: string; runId?: string }): Promise<string>;
+  create(input: { journalKey: string; ref: string; runId: string }): Promise<string>;
   /** Deshace la anterior. Falso cuando no había nada que deshacer. */
   remove(ref: string): Promise<boolean>;
   /**
@@ -153,7 +177,7 @@ export interface CorrectionWrites {
 }
 
 export interface ChannelQueries {
-  list(runId?: string): Promise<readonly ChannelView[]>;
+  list(runId: string): Promise<readonly ChannelView[]>;
 }
 
 /** A bank statement sitting in the inbox, whether or not a run has read it. */

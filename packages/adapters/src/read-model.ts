@@ -2,6 +2,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import {
   type Account,
   type ErpReconciliationReport,
+  LATEST_RUN,
   type Lineage,
   type MatchResult,
   type Movement,
@@ -49,17 +50,27 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
   // Revived, not cast: what comes back from Postgres is JSON, and the domain
   // objects have to be rebuilt before anything calls a method on them.
   /**
-   * One run's flow report, or the most recent one.
+   * El reporte de fase 2 de una corrida. Ya no hay «la más reciente» implícita.
    *
-   * Every query takes the run id and none of them used to: the console could
-   * list past runs and then show the latest one's numbers under any of their
-   * names, which is worse than not offering the list at all.
+   * Quien quiera la última la pide por su nombre —`latest`— y `resolve` la
+   * convierte en un id concreto antes de que nadie lea nada. Un default mudo
+   * acá significaba que pedir el detalle de un resultado de una corrida vieja
+   * contestaba con los números de otra, o con un 404 sobre algo que estaba
+   * guardado.
    */
-  const flowOf = async (runId?: string): Promise<ReconciliationReport | undefined> => {
-    const stored = runId
-      ? await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi')
-      : await repositories.reports.latest<unknown>('flow', 'wompi');
+  const flowOf = async (runId: string): Promise<ReconciliationReport | undefined> => {
+    const stored = await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi');
     return stored ? reviveFlowReport(stored) : undefined;
+  };
+
+  /** `latest` al id de la corrida más nueva; cualquier otro, si existe. */
+  const resolveRun = async (runId: string): Promise<string | undefined> => {
+    if (runId !== LATEST_RUN) {
+      const found = await repositories.runs.findById(asRunId(runId));
+      return found?.id;
+    }
+    const [newest] = await repositories.runs.list(1);
+    return newest?.id;
   };
 
   return {
@@ -112,12 +123,17 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         ]);
         if (!charge || !credit) return undefined;
 
+        // El ledger es acumulativo y no pertenece a ninguna corrida, pero
+        // para decir *por qué* dos movimientos están relacionados hace falta
+        // un resultado, y el más útil es el de la corrida más reciente.
+        const latest = await resolveRun(LATEST_RUN);
         const batch = (await currentBatches()).find((candidate) =>
           candidate.chargeIds.includes(charge.id),
         );
-        const match = batch
-          ? (await flowOf())?.matches.find((m) => m.left.batchId === batch.id)
-          : undefined;
+        const match =
+          batch && latest
+            ? (await flowOf(latest))?.matches.find((m) => m.left.batchId === batch.id)
+            : undefined;
 
         return correlate({
           charge,
@@ -139,8 +155,12 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     },
 
     flow: {
-      listBatches: async () => currentBatches(),
-      findBatch: async (batchId) => (await currentBatches()).find((batch) => batch.id === batchId),
+      // Los lotes se reconstruyen del ledger, que es determinístico, y se
+      // recortan al período que esa corrida pidió: los lotes de marzo no son
+      // parte de una corrida de enero a febrero.
+      listBatches: async (runId) => batchesOf(runId),
+      findBatch: async (runId, batchId) =>
+        (await batchesOf(runId)).find((batch) => batch.id === batchId),
 
       listReconciliations: async ({ status, runId }) => {
         const report = await flowOf(runId);
@@ -154,26 +174,30 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         return matches.filter((match) => match.status.toUpperCase() === wanted);
       },
 
-      findReconciliation: async (matchId) =>
-        (await flowOf())?.matches.find((match) => match.id === matchId),
+      findReconciliation: async (runId, matchId) =>
+        (await flowOf(runId))?.matches.find((match) => match.id === matchId),
 
       flowReport: async (runId) => flowOf(runId),
     },
 
     erp: {
       erpReconciliation: async ({ journalKey, runId }) => {
-        const stored = runId
-          ? await repositories.reports.load<unknown>(asRunId(runId), 'erp', journalKey)
-          : await repositories.reports.latest<unknown>('erp', journalKey);
+        const stored = await repositories.reports.load<unknown>(
+          asRunId(runId),
+          'erp',
+          journalKey,
+        );
         return stored ? reviveErpReport(stored) : undefined;
       },
     },
 
     corrections: {
       create: async ({ journalKey, ref, runId }) => {
-        const stored = runId
-          ? await repositories.reports.load<unknown>(asRunId(runId), 'erp', journalKey)
-          : await repositories.reports.latest<unknown>('erp', journalKey);
+        const stored = await repositories.reports.load<unknown>(
+          asRunId(runId),
+          'erp',
+          journalKey,
+        );
         if (!stored) throw new Error(`No hay conciliación del diario ${journalKey}`);
 
         // La corrección se toma del reporte, no de lo que mandó el cliente.
@@ -213,6 +237,7 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         const run = await repositories.runs.findById(asRunId(runId));
         return run ? toRunRecord(run) : undefined;
       },
+      resolve: async (runId) => resolveRun(runId),
       start: async ({ from, to }) => runPipeline(from, to),
       reportArtifact: async (runId, format) => {
         const stored = await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi');
@@ -235,6 +260,24 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     return buildSettlementBatches({ calendar, accountId: accounts.wompi, movements });
   }
 
+  /**
+   * Los lotes que esa corrida vio.
+   *
+   * Se reconstruyen del ledger —`buildSettlementBatches` es determinístico— y
+   * se recortan al rango que la corrida pidió. Sin el recorte, una corrida de
+   * enero a febrero listaría lotes de abril que nunca miró.
+   */
+  async function batchesOf(runId: string): Promise<SettlementBatch[]> {
+    const run = await repositories.runs.findById(asRunId(runId));
+    const all = await currentBatches();
+    if (!run) return [];
+
+    const { from, to } = run.range;
+    return all.filter(
+      (batch) => batch.batchDate.toString() >= from && batch.batchDate.toString() <= to,
+    );
+  }
+
   async function buildLineage(movementId: string): Promise<Lineage | undefined> {
     const charge = await repositories.movements.findById(asMovementId(movementId));
     if (!charge) return undefined;
@@ -244,7 +287,10 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     if (!batch) return undefined;
 
     const charges = await chargesOf(batch);
-    const match = (await flowOf())?.matches.find((m) => m.left.batchId === batch.id);
+    const latest = await resolveRun(LATEST_RUN);
+    const match = latest
+      ? (await flowOf(latest))?.matches.find((m) => m.left.batchId === batch.id)
+      : undefined;
     // The first credit is the one a lineage view follows; a split settlement
     // is shown in full on the reconciliation screen, not here.
     const settlingId = match?.right?.movementIds[0];

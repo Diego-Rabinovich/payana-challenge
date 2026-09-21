@@ -5,6 +5,7 @@ import type {
   MovementRepository,
   RawRecordRepository,
   RunRepository,
+  StoredRun,
 } from '../ports/repositories.js';
 import type { DateRange } from '../ports/source-connector.js';
 
@@ -41,9 +42,14 @@ export class InMemoryMovementRepository implements MovementRepository {
     let inserted = 0;
     let updated = 0;
     for (const movement of incoming) {
-      if (this.movements.has(movement.id)) updated += 1;
+      const previo = this.movements.get(movement.id);
+      if (previo) updated += 1;
       else inserted += 1;
-      this.movements.set(movement.id, movement);
+      // Igual que el de Postgres: la corrida de origen no se pisa.
+      this.movements.set(movement.id, {
+        ...movement,
+        ...(previo?.runId ? { runId: previo.runId } : {}),
+      });
     }
     return { inserted, updated };
   }
@@ -73,20 +79,25 @@ export class InMemoryMovementRepository implements MovementRepository {
   }
 }
 
-type RunRecord = { id: RunId; startedAt: string; rulesetVersion: string };
-
 export class InMemoryRunRepository implements RunRepository {
-  private readonly runs = new Map<RunId, RunRecord>();
+  private readonly runs = new Map<RunId, StoredRun>();
 
-  async create(run: RunRecord): Promise<void> {
-    this.runs.set(run.id, run);
+  async create(run: {
+    id: RunId;
+    startedAt: string;
+    rulesetVersion: string;
+    from: string;
+    to: string;
+  }): Promise<void> {
+    const { from, to, ...rest } = run;
+    this.runs.set(run.id, { ...rest, range: { from, to } });
   }
 
-  async findById(id: RunId): Promise<RunRecord | undefined> {
+  async findById(id: RunId): Promise<StoredRun | undefined> {
     return this.runs.get(id);
   }
 
-  async list(limit = 50): Promise<RunRecord[]> {
+  async list(limit = 50): Promise<StoredRun[]> {
     return [...this.runs.values()]
       .sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0))
       .slice(0, limit);

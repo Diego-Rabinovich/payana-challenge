@@ -225,7 +225,7 @@ export function stubReadModel(): ReadModel {
         status
           ? FLOW_REPORT.matches.filter((m) => m.status === status.toUpperCase())
           : FLOW_REPORT.matches,
-      findReconciliation: async (id) => FLOW_REPORT.matches.find((m) => m.id === id),
+      findReconciliation: async (_runId, id) => FLOW_REPORT.matches.find((m) => m.id === id),
       flowReport: async () => FLOW_REPORT,
     },
 
@@ -258,6 +258,10 @@ export function stubReadModel(): ReadModel {
     runs: {
       list: async () => [],
       find: async () => undefined,
+      // Como el de verdad: solo resuelve corridas que existen. Devolver el id
+      // que le pasaron convertiria cualquier cadena en una corrida valida.
+      resolve: async (runId) =>
+        runId === 'latest' || runId === 'run_test' ? 'run_test' : undefined,
       start: async () => {
         throw new Error('the MCP server never starts a run');
       },

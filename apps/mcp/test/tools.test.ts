@@ -110,12 +110,20 @@ describe('F06-T03 · the vocabulary is closed and published', () => {
 
 describe('failures are messages, not exceptions', () => {
   it('says so when an id does not exist', async () => {
+    // El error nombra la corrida: un id de match existe o no *dentro de una*,
+    // y decir cual se miro es la diferencia entre un error util y uno mudo.
     expect(await toolNamed('explain_match')!.run({ matchId: 'nope' }, model)).toEqual({
-      error: 'no match nope',
+      error: 'no match nope in run run_test',
     });
     expect(await toolNamed('trace_movement')!.run({ movementId: 'nope' }, model)).toEqual({
       error: 'no movement nope',
     });
+  });
+
+  it('una corrida que no existe se dice, no se sustituye por la ultima', async () => {
+    expect(
+      await toolNamed('explain_match')!.run({ matchId: 'mat_one', runId: 'run_inventada' }, model),
+    ).toEqual({ error: 'no run run_inventada' });
   });
 
   it('rejects a limit outside the range instead of paging the world', () => {

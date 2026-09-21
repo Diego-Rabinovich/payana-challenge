@@ -39,20 +39,24 @@ The explicit domain → DTO mapping. This is where the internal model is protect
 | `GET /runs/{runId}/report?format=md\|json\|ndjson` | The run artifact |
 | `GET /accounts` · `GET /accounts/{accountId}/movements` | Accounts and cursor-paginated movements |
 | `GET /movements/{movementId}` · `GET /movements/{movementId}/lineage` | Movement and where its money went |
-| `GET /settlement-batches` · `GET /settlement-batches/{batchId}` | Batches |
-| `GET /reconciliations?status=ambiguous` | Channel-to-bank results, filterable |
-| `GET /reconciliations/{matchId}` | Detail with evidence and alternatives |
-| `GET /unattributed-credits` | Credits no batch claimed |
-| `GET /erp-reconciliations/{journalKey}` | ERP reconciliation, each line with its proposed correction |
-| `POST /erp-journal-entries` | Creates the missing entries. Guarded by Phase 3's write policy |
+| `GET /runs/{runId}/summary` | The funnel and the counts the panel is built from |
+| `GET /runs/{runId}/settlement-batches` · `/{batchId}` | Batches |
+| `GET /runs/{runId}/reconciliations?status=ambiguous` | Channel-to-bank results, filterable |
+| `GET /runs/{runId}/reconciliations/{matchId}` | Detail with evidence and alternatives |
+| `GET /runs/{runId}/unattributed-credits` | Credits no batch claimed |
+| `GET /runs/{runId}/erp-reconciliations/{journalKey}` | ERP reconciliation, each line with its proposed correction |
+| `GET /runs/{runId}/channels` | Connected sources and what that run measured |
+| `POST /erp-journal-entries` | Creates one missing entry as a draft, from the correction a run found |
 | `GET /evidence-codes` | The closed vocabulary with descriptions |
+| | |
+| **Why the nesting** | A match id is stable across runs on purpose, so it names a pairing and not a result: the same id can carry a different score under a different run. A flat `/reconciliations/{id}` therefore identified a family of representations, disambiguated by an optional `?runId` that defaulted to whichever run happened last — so a detail stored in an older run answered 404 while that run's own list showed it. `latest` is a valid `{runId}` and the server resolves it, so "the most recent" stays expressible without ever being implicit. The ledger stays flat: a movement id is a content hash and belongs to no run. |
 | `POST /sources/{sourceId}/documents` | Uploads a monthly statement (multipart) |
 
 **Every path names a resource, never an action.** A movement's provenance is
 `/movements/{id}/lineage`, a sub-resource — not `/trace`. Creating the missing
 entries posts to the `erp-journal-entries` collection rather than to a
 `post-missing` endpoint. And there is no `dryRun` flag anywhere: the preview is
-already a different resource, since `GET /erp-reconciliations/{journalKey}`
+already a different resource, since `GET /runs/{runId}/erp-reconciliations/{journalKey}`
 returns every `proposedEntry` before anything is written. A test asserts that no
 published path matches a verb.
 
@@ -132,7 +136,7 @@ Output locale is `es-AR`, formal register, with Argentine number formatting.
 
 ```
 make demo          # writes the three artifacts to data/out/
-curl localhost:3000/api/v1/reconciliations?status=ambiguous
+curl localhost:3000/api/v1/runs/latest/reconciliations?status=ambiguous
 open localhost:3000/docs
 ```
 

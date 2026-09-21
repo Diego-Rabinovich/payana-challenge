@@ -118,18 +118,23 @@ export const runRoutes =
     );
 
     app.get(
-      '/channels',
+      '/runs/:runId/channels',
       {
         schema: {
           tags: ['meta'],
-          summary: 'Connected sources: how each one settles, and what the last run observed',
-          querystring: z.object({ runId: z.string().optional() }),
+          summary: 'Connected sources: how each one settles, and what that run measured',
+          description:
+            'La calibración se mide sobre las liquidaciones que cruzaron en esa corrida, así ' +
+            'que la respuesta depende de cuál. `latest` es un id válido.',
+          params: z.object({ runId: z.string().describe('Id de la corrida, o `latest`') }),
           response: { 200: z.object({ channels: z.array(ChannelDto) }) },
         },
       },
-      async (request) => ({
-        channels: (await deps.channels.list(request.query.runId)).map(toChannelDto),
-      }),
+      async (request) => {
+        const runId = await deps.runs.resolve(request.params.runId);
+        if (!runId) throw new NotFoundError(`Run ${request.params.runId}`);
+        return { channels: (await deps.channels.list(runId)).map(toChannelDto) };
+      },
     );
 
     app.get(

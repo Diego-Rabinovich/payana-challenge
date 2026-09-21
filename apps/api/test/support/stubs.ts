@@ -140,7 +140,7 @@ export function stubDependencies(): ReadModel {
       listBatches: async () => [],
       findBatch: async () => undefined,
       listReconciliations: async () => [match],
-      findReconciliation: async (id) => (id === 'mat_1' ? match : undefined),
+      findReconciliation: async (_runId, id) => (id === 'mat_1' ? match : undefined),
       flowReport: async () => undefined,
     },
 
@@ -174,6 +174,9 @@ export function stubDependencies(): ReadModel {
     runs: {
       list: async () => [],
       find: async () => undefined,
+      // El stub reconoce una sola corrida y `latest`; cualquier otra cosa es
+      // un 404, que es justamente lo que un test de alcance quiere poder ver.
+      resolve: async (runId) => (runId === 'latest' || runId === 'run_1' ? 'run_1' : undefined),
       start: async ({ from, to }) => ({
         id: 'run_1',
         startedAt: '2026-04-30T12:00:00.000Z',

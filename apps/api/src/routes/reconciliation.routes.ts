@@ -27,6 +27,7 @@ import type {
   FlowQueries,
   LedgerQueries,
   RuleSet,
+  RunQueries,
 } from '@aa/core';
 
 const StatusFilter = z
@@ -46,6 +47,15 @@ const Paging = {
   limit: z.coerce.number().int().min(1).max(200).default(25),
   offset: z.coerce.number().int().min(0).default(0),
 };
+
+/**
+ * El alcance, en el path y obligatorio.
+ *
+ * `latest` es un valor válido y se resuelve del lado del servidor, así que el
+ * panel sigue teniendo una URL estable sin que «la última» quede implícita en
+ * ningún lado.
+ */
+const RunParam = { runId: z.string().describe('Id de la corrida, o `latest`') };
 
 const Range = {
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -67,25 +77,40 @@ export const reconciliationRoutes =
     erp: ErpQueries,
     ledger: LedgerQueries,
     corrections: CorrectionWrites,
+    runs: RunQueries,
     accountMap: AccountMap,
     ruleSet: RuleSet,
   ): FastifyPluginAsync =>
   async (fastify) => {
     const app = fastify.withTypeProvider<ZodTypeProvider>();
 
+    /**
+     * Resuelve el alcance antes de leer nada.
+     *
+     * Una corrida que no existe es un 404, no los números de otra. Y `latest`
+     * se convierte acá en un id concreto, así que de este punto para adentro
+     * nadie vuelve a razonar sobre «la más reciente» — la respuesta puede
+     * decir de qué corrida habla porque lo sabe.
+     */
+    const scope = async (runId: string): Promise<string> => {
+      const resolved = await runs.resolve(runId);
+      if (!resolved) throw new NotFoundError(`Run ${runId}`);
+      return resolved;
+    };
+
     app.get(
-      '/reconciliation-summary',
+      '/runs/:runId/summary',
       {
         schema: {
           tags: ['reconciliation'],
           summary: 'The funnel and the counts. What the panel is built from',
-          querystring: z.object({ runId: z.string().optional() }),
+          params: z.object(RunParam),
           response: { 200: ReconciliationSummaryDto },
         },
       },
       async (request) => {
-        const report = await flow.flowReport(request.query.runId);
-        if (!report) throw new NotFoundError('No run has been completed yet');
+        const report = await flow.flowReport(await scope(request.params.runId));
+        if (!report) throw new NotFoundError(`Run ${request.params.runId} has no phase-2 report`);
 
         return toReconciliationSummaryDto(report, ruleSet.version, (counterparty) =>
           ruleSet.isChannelCounterparty('wompi', counterparty),
@@ -94,12 +119,13 @@ export const reconciliationRoutes =
     );
 
     app.get(
-      '/settlement-batches',
+      '/runs/:runId/settlement-batches',
       {
         schema: {
           tags: ['reconciliation'],
           summary: 'One row per settlement: what was sold, deducted and received',
-          querystring: z.object({ runId: z.string().optional(), ...Range, ...Paging }),
+          params: z.object(RunParam),
+          querystring: z.object({ ...Range, ...Paging }),
           response: {
             200: z.object({ batches: z.array(SettlementBatchDto), page: OffsetPageDto }),
           },
@@ -107,7 +133,7 @@ export const reconciliationRoutes =
       },
       async (request) => {
         const { from, to, limit, offset } = request.query;
-        const all = (await flow.listBatches(request.query.runId))
+        const all = (await flow.listBatches(await scope(request.params.runId)))
           .map(toSettlementBatchDto)
           .filter((batch) => withinRange(batch.batchDate, from, to));
 
@@ -117,33 +143,30 @@ export const reconciliationRoutes =
     );
 
     app.get(
-      '/settlement-batches/:batchId',
+      '/runs/:runId/settlement-batches/:batchId',
       {
         schema: {
           tags: ['reconciliation'],
-          params: z.object({ batchId: z.string() }),
+          params: z.object({ ...RunParam, batchId: z.string() }),
           response: { 200: SettlementBatchDto },
         },
       },
       async (request) => {
-        const batch = await flow.findBatch(request.params.batchId);
+        const runId = await scope(request.params.runId);
+        const batch = await flow.findBatch(runId, request.params.batchId);
         if (!batch) throw new NotFoundError(`Batch ${request.params.batchId}`);
         return toSettlementBatchDto(batch);
       },
     );
 
     app.get(
-      '/reconciliations',
+      '/runs/:runId/reconciliations',
       {
         schema: {
           tags: ['reconciliation'],
           summary: 'Channel-to-bank results; filter by status for the exception queue',
-          querystring: z.object({
-            runId: z.string().optional(),
-            status: StatusFilter,
-            ...Range,
-            ...Paging,
-          }),
+          params: z.object(RunParam),
+          querystring: z.object({ status: StatusFilter, ...Range, ...Paging }),
           response: {
             200: z.object({ reconciliations: z.array(ReconciliationDto), page: OffsetPageDto }),
           },
@@ -153,7 +176,7 @@ export const reconciliationRoutes =
         const { from, to, limit, offset } = request.query;
         const all = (
           await flow.listReconciliations({
-            ...(request.query.runId ? { runId: request.query.runId } : {}),
+            runId: await scope(request.params.runId),
             ...(request.query.status ? { status: request.query.status } : {}),
           })
         )
@@ -166,24 +189,29 @@ export const reconciliationRoutes =
     );
 
     app.get(
-      '/reconciliations/:matchId',
+      '/runs/:runId/reconciliations/:matchId',
       {
         schema: {
           tags: ['reconciliation'],
           summary: 'One result with its evidence and the candidates it discarded',
-          params: z.object({ matchId: z.string() }),
+          description:
+            'El id de un match es estable entre corridas a propósito, así que nombra un ' +
+            'emparejamiento y no un resultado: el mismo id puede tener otro score bajo otra ' +
+            'corrida. Por eso el alcance va en el path y no admite default.',
+          params: z.object({ ...RunParam, matchId: z.string() }),
           response: { 200: ReconciliationDto },
         },
       },
       async (request) => {
-        const match = await flow.findReconciliation(request.params.matchId);
+        const runId = await scope(request.params.runId);
+        const match = await flow.findReconciliation(runId, request.params.matchId);
         if (!match) throw new NotFoundError(`Reconciliation ${request.params.matchId}`);
         return toReconciliationDto(match);
       },
     );
 
     app.get(
-      '/reconciliations/:matchId/movements',
+      '/runs/:runId/reconciliations/:matchId/movements',
       {
         schema: {
           tags: ['reconciliation'],
@@ -191,7 +219,7 @@ export const reconciliationRoutes =
           description:
             'What a settlement is, spelled out: the gateway charges due on one day, and the bank ' +
             'rows they arrived in. Enough to check the arithmetic by hand against a statement.',
-          params: z.object({ matchId: z.string() }),
+          params: z.object({ ...RunParam, matchId: z.string() }),
           response: {
             200: z.object({
               charges: z.array(MovementDto),
@@ -208,7 +236,8 @@ export const reconciliationRoutes =
         },
       },
       async (request) => {
-        const match = await flow.findReconciliation(request.params.matchId);
+        const runId = await scope(request.params.runId);
+        const match = await flow.findReconciliation(runId, request.params.matchId);
         if (!match) throw new NotFoundError(`Reconciliation ${request.params.matchId}`);
 
         const [charges, credits] = await Promise.all([
@@ -239,13 +268,13 @@ export const reconciliationRoutes =
     );
 
     app.get(
-      '/unattributed-credits',
+      '/runs/:runId/unattributed-credits',
       {
         schema: {
           tags: ['reconciliation'],
           summary: 'Bank credits no settlement claimed',
+          params: z.object(RunParam),
           querystring: z.object({
-            runId: z.string().optional(),
             // The bank account carries everything: interest, transfers from
             // other payers, account fees. Only the channel's own credits are a
             // reconciliation finding; the rest is noise the CFO may still want
@@ -264,7 +293,7 @@ export const reconciliationRoutes =
       },
       async (request) => {
         const { from, to, limit, offset, channel } = request.query;
-        const report = await flow.flowReport(request.query.runId);
+        const report = await flow.flowReport(await scope(request.params.runId));
 
         const all = (report?.unattributed ?? [])
           .map(toUnattributedCreditDto)
@@ -294,19 +323,22 @@ export const reconciliationRoutes =
           body: z.object({
             journalKey: z.enum(['wompi', 'bancolombia']),
             ref: z.string().startsWith('mov:'),
-            runId: z.string().optional(),
+            // La corrección se reconstruye del reporte de una corrida, así que
+            // cuál es una entrada de la operación, no un filtro opcional.
+            runId: z.string(),
           }),
           response: { 201: z.object({ entryId: z.string(), ref: z.string() }) },
         },
       },
       async (request, reply) => {
-        const { journalKey, ref, runId } = request.body;
+        const { journalKey, ref } = request.body;
+        // El alcance se resuelve afuera del try: una corrida que no existe es
+        // un 404, no un rechazo de Odoo. Adentro, el catch convertía las dos
+        // cosas en el mismo 400.
+        const runId = await scope(request.body.runId);
+
         try {
-          const entryId = await corrections.create({
-            journalKey,
-            ref,
-            ...(runId ? { runId } : {}),
-          });
+          const entryId = await corrections.create({ journalKey, ref, runId });
           void reply.status(201);
           return { entryId, ref };
         } catch (cause) {
@@ -366,20 +398,20 @@ export const reconciliationRoutes =
     );
 
     app.get(
-      '/erp-reconciliations/:journalKey',
+      '/runs/:runId/erp-reconciliations/:journalKey',
       {
         schema: {
           tags: ['erp'],
           summary: 'Ledger against its formal book, line by line, with the correction each implies',
-          params: z.object({ journalKey: z.enum(['wompi', 'bancolombia']) }),
-          querystring: z.object({ runId: z.string().optional(), status: z.string().optional() }),
+          params: z.object({ ...RunParam, journalKey: z.enum(['wompi', 'bancolombia']) }),
+          querystring: z.object({ status: z.string().optional() }),
           response: { 200: ErpReconciliationDto },
         },
       },
       async (request) => {
         const report = await erp.erpReconciliation({
           journalKey: request.params.journalKey,
-          ...(request.query.runId ? { runId: request.query.runId } : {}),
+          runId: await scope(request.params.runId),
           ...(request.query.status ? { status: request.query.status } : {}),
         });
         if (!report) throw new NotFoundError(`ERP reconciliation for ${request.params.journalKey}`);

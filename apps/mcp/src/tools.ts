@@ -16,7 +16,7 @@ import {
   toReconciliationDto,
   toUnattributedCreditDto,
 } from '@aa/adapters';
-import type { ReadModel } from '@aa/core';
+import { LATEST_RUN, type ReadModel } from '@aa/core';
 import { z } from 'zod';
 
 /**
@@ -31,8 +31,8 @@ import { z } from 'zod';
  *   2. Tools return the same DTOs as the HTTP API. There is no second schema
  *      to keep in step, because there is no second schema.
  *   3. There are no write tools. Creating entries in a production ERP does not
- *      belong one prompt away; that stays in the CLI behind --confirm, where a
- *      person typed it.
+ *      belong one prompt away; that stays in the console, behind a button a
+ *      person pressed, with its own undo.
  *
  * The reason this exists at all is context. Handing a year of ledgers to a
  * model means pasting hundreds of thousands of movements into a prompt; they
@@ -48,9 +48,29 @@ export interface Tool<Input extends z.ZodTypeAny = z.ZodTypeAny> {
   run(input: z.infer<Input>, model: ReadModel): Promise<unknown>;
 }
 
+/**
+ * De qué corrida habla la pregunta.
+ *
+ * `latest` es el default y es explícito: el valor viaja hasta el read model,
+ * que lo convierte en un id concreto. Antes era la ausencia del campo lo que
+ * significaba «la última», y un agente que listaba excepciones de una corrida
+ * y después pedía el detalle de una podía recibir la versión de otra sin que
+ * nada en la respuesta lo dijera.
+ */
 const RunScope = z.object({
-  runId: z.string().optional().describe('Defaults to the most recent run'),
+  runId: z.string().default('latest').describe('Id de la corrida, o `latest`'),
 });
+
+/**
+ * Un id concreto, o undefined si esa corrida no existe.
+ *
+ * Acepta ausente además de `latest` porque el default vive en el esquema Zod
+ * y un llamador directo —un test, otro proceso— no pasa por ahí. Que la
+ * función sea total evita que ese caso se vea como «no existe la corrida».
+ */
+async function resolved(runId: string | undefined, model: ReadModel): Promise<string | undefined> {
+  return model.runs.resolve(runId ?? LATEST_RUN);
+}
 
 /** The funnel, which is the one number a CFO asks for first. */
 const getRunSummary: Tool = {
@@ -69,8 +89,11 @@ const getRunSummary: Tool = {
     unattributedCredits: z.number().int(),
   }),
   async run(input: z.infer<typeof RunScope>, model) {
-    const report = await model.flow.flowReport(input.runId);
-    if (!report) return { error: 'no run found' };
+    const runId = await resolved(input.runId, model);
+    if (!runId) return { error: `no run ${input.runId}` };
+
+    const report = await model.flow.flowReport(runId);
+    if (!report) return { error: `run ${runId} has no phase-2 report` };
 
     return {
       ...(report.runId ? { runId: report.runId } : {}),
@@ -104,14 +127,19 @@ const listExceptions: Tool = {
   description:
     'Settlements needing attention, newest first. Filter by confidence band and page through with limit/offset. Returns ids to pass to explain_match.',
   input: ExceptionQuery,
-  output: z.object({
-    total: z.number().int(),
-    returned: z.number().int(),
-    exceptions: z.array(ReconciliationDto),
-  }),
+  output: z
+    .object({
+      total: z.number().int(),
+      returned: z.number().int(),
+      exceptions: z.array(ReconciliationDto),
+    })
+    .or(z.object({ error: z.string() })),
   async run(input: z.infer<typeof ExceptionQuery>, model) {
+    const runId = await resolved(input.runId, model);
+    if (!runId) return { error: `no run ${input.runId}` };
+
     const all = await model.flow.listReconciliations({
-      ...(input.runId ? { runId: input.runId } : {}),
+      runId,
       ...(input.status ? { status: input.status } : {}),
     });
     const page = all.slice(input.offset, input.offset + input.limit);
@@ -124,17 +152,20 @@ const listExceptions: Tool = {
   },
 };
 
-const MatchRef = z.object({ matchId: z.string() });
+const MatchRef = RunScope.extend({ matchId: z.string() });
 
 const explainMatch: Tool = {
   name: 'explain_match',
   description:
-    'Everything behind one settlement result: which checks passed and failed, the weight each carried, the confidence band, the window considered, and the candidates that were discarded with the reason each lost.',
+    'Everything behind one settlement result: which checks passed and failed, the weight each carried, the confidence band, the window considered, and the candidates that were discarded with the reason each lost. Pass the same runId you listed it from: a match id is stable across runs, so it names a pairing rather than a result.',
   input: MatchRef,
   output: ReconciliationDto.or(z.object({ error: z.string() })),
   async run(input: z.infer<typeof MatchRef>, model) {
-    const match = await model.flow.findReconciliation(input.matchId);
-    if (!match) return { error: `no match ${input.matchId}` };
+    const runId = await resolved(input.runId, model);
+    if (!runId) return { error: `no run ${input.runId}` };
+
+    const match = await model.flow.findReconciliation(runId, input.matchId);
+    if (!match) return { error: `no match ${input.matchId} in run ${runId}` };
     return toReconciliationDto(match);
   },
 };
@@ -159,12 +190,14 @@ const listUnattributedCredits: Tool = {
   description:
     'Bank credits no settlement claimed. Not errors — interest, an unrelated transfer, a payer we do not track — but every one of them is money that arrived without an explanation.',
   input: RunScope.extend({ limit: z.number().int().min(1).max(200).default(50) }),
-  output: z.object({
-    total: z.number().int(),
-    credits: z.array(UnattributedCreditDto),
-  }),
+  output: z
+    .object({ total: z.number().int(), credits: z.array(UnattributedCreditDto) })
+    .or(z.object({ error: z.string() })),
   async run(input: z.infer<typeof RunScope> & { limit: number }, model) {
-    const report = await model.flow.flowReport(input.runId);
+    const runId = await resolved(input.runId, model);
+    if (!runId) return { error: `no run ${input.runId}` };
+
+    const report = await model.flow.flowReport(runId);
     const credits = report?.unattributed ?? [];
 
     return {
@@ -185,9 +218,12 @@ const getErpDiscrepancies: Tool = {
   input: ErpQuery,
   output: ErpReconciliationDto.or(z.object({ error: z.string() })),
   async run(input: z.infer<typeof ErpQuery>, model) {
+    const runId = await resolved(input.runId, model);
+    if (!runId) return { error: `no run ${input.runId}` };
+
     const report = await model.erp.erpReconciliation({
       journalKey: input.journalKey,
-      ...(input.runId ? { runId: input.runId } : {}),
+      runId,
     });
     if (!report) return { error: `no ERP reconciliation for ${input.journalKey}` };
     return toErpReconciliationDto(report, model.accountMap);

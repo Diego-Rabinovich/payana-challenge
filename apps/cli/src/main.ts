@@ -52,7 +52,9 @@ try {
     const run = await readModel.runs.start({ from, to });
     console.log(`  corrida ${run.id} · ruleset ${run.rulesetVersion}`);
 
-    const report = await readModel.flow.flowReport();
+    // La corrida que acabamos de crear, no «la última»: si dos corridas se
+    // lanzan a la vez, el resumen que imprime esta tiene que ser el de esta.
+    const report = await readModel.flow.flowReport(run.id);
     if (report) {
       console.log(`  ${report.totals.batches} liquidaciones`);
       for (const [status, count] of Object.entries(report.totals.byStatus)) {

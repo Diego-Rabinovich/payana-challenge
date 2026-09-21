@@ -77,6 +77,7 @@ export async function buildApp(
           deps.erp,
           deps.ledger,
           deps.corrections,
+          deps.runs,
           deps.accountMap,
           deps.ruleSet,
         ),

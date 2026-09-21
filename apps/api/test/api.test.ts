@@ -60,7 +60,7 @@ describe('HTTP API', () => {
   });
 
   it('serves a reconciliation with its evidence and discarded alternatives', async () => {
-    const response = await get('/reconciliations/mat_1');
+    const response = await get('/runs/run_1/reconciliations/mat_1');
 
     expect(response.statusCode).toBe(200);
     const body = ReconciliationDto.parse(response.json());
@@ -69,14 +69,14 @@ describe('HTTP API', () => {
   });
 
   it('filters the collection by status, for the exception queue', async () => {
-    const response = await get('/reconciliations?status=ambiguous');
+    const response = await get('/runs/run_1/reconciliations?status=ambiguous');
 
     expect(response.statusCode).toBe(200);
     expect(deps.flow.listReconciliations).toBeDefined();
   });
 
   it('returns RFC 9457 problem details for a missing resource (F04-T03)', async () => {
-    const response = await get('/reconciliations/does-not-exist');
+    const response = await get('/runs/run_1/reconciliations/does-not-exist');
 
     expect(response.statusCode).toBe(404);
     expect(response.headers['content-type']).toContain('application/problem+json');
@@ -86,6 +86,25 @@ describe('HTTP API', () => {
       status: 404,
       code: 'NOT_FOUND',
     });
+  });
+
+  it('no hay forma de pedir un resultado sin decir de que corrida', async () => {
+    // La ruta plana era la que dejaba que el id de un match —estable entre
+    // corridas— se resolviera contra la ultima que hubiera corrido.
+    const response = await get('/reconciliations/mat_1');
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('`latest` es un id valido y el servidor lo resuelve', async () => {
+    const response = await get('/runs/latest/reconciliations/mat_1');
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('una corrida que no existe es un 404, no los numeros de otra', async () => {
+    const response = await get('/runs/run_inventada/reconciliations/mat_1');
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('returns problem details for an unknown route too, never bare HTML', async () => {

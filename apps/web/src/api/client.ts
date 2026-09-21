@@ -72,19 +72,30 @@ export interface Window {
   readonly offset?: number;
 }
 
+/**
+ * Toda colección que sea la conclusión de una corrida vive debajo de ella.
+ *
+ * Sin corrida elegida el prefijo es `latest`, que el servidor resuelve a un id
+ * concreto y devuelve en la respuesta. La diferencia con el `?runId` opcional
+ * de antes es que ahora «la última» se pide por su nombre en lugar de ser lo
+ * que pasa cuando nadie dice nada.
+ */
+const LATEST = 'latest';
+
+const scope = (runId?: string) => `/runs/${encodeURIComponent(runId ?? LATEST)}`;
+
 export const api = {
   health: () => get<HealthDto>('/health'),
 
   /** The rubric, so the glossary never transcribes what the engine scores with. */
   rubric: () => get<RubricDto>('/evidence-codes'),
 
-  summary: (runId?: string) =>
-    get<ReconciliationSummaryDto>(`/reconciliation-summary${query({ runId })}`),
+  summary: (runId?: string) => get<ReconciliationSummaryDto>(`${scope(runId)}/summary`),
 
   accounts: () => get<{ accounts: AccountDto[] }>('/accounts'),
 
-  /** Connected sources, their settings, and what the last run observed. */
-  channels: (runId?: string) => get<{ channels: ChannelDto[] }>(`/channels${query({ runId })}`),
+  /** Connected sources, their settings, and what that run measured. */
+  channels: (runId?: string) => get<{ channels: ChannelDto[] }>(`${scope(runId)}/channels`),
 
   movements: (accountId: string, params: Window = {}) =>
     get<{ movements: MovementDto[]; page: OffsetPageDto & { nextCursor: string | null } }>(
@@ -100,35 +111,37 @@ export const api = {
   uploadStatement: (filename: string, contentBase64: string) =>
     post<StatementFileDto>('/statements', { filename, contentBase64 }),
 
-  reconciliations: async (params: Window & { status?: string; runId?: string } = {}) => {
+  reconciliations: async ({ runId, ...params }: Window & { status?: string; runId?: string } = {}) => {
     const body = await get<{ reconciliations: ReconciliationDto[]; page: OffsetPageDto }>(
-      `/reconciliations${query({ ...params })}`,
+      `${scope(runId)}/reconciliations${query({ ...params })}`,
     );
     return { rows: body.reconciliations, page: body.page } satisfies Paged<ReconciliationDto>;
   },
 
-  reconciliation: (matchId: string) => get<ReconciliationDto>(`/reconciliations/${matchId}`),
+  reconciliation: (matchId: string, runId?: string) =>
+    get<ReconciliationDto>(`${scope(runId)}/reconciliations/${matchId}`),
 
   /** The payments behind a settlement and the bank rows that paid it. */
-  settlementMovements: (matchId: string) =>
+  settlementMovements: (matchId: string, runId?: string) =>
     get<{
       charges: MovementDto[];
       credits: MovementDto[];
       rejected: { movement: MovementDto; score: number; rejectedBecause: string }[];
-    }>(`/reconciliations/${matchId}/movements`),
+    }>(`${scope(runId)}/reconciliations/${matchId}/movements`),
 
-  settlementBatches: async (params: Window & { runId?: string } = {}) => {
+  settlementBatches: async ({ runId, ...params }: Window & { runId?: string } = {}) => {
     const body = await get<{ batches: SettlementBatchDto[]; page: OffsetPageDto }>(
-      `/settlement-batches${query({ ...params })}`,
+      `${scope(runId)}/settlement-batches${query({ ...params })}`,
     );
     return { rows: body.batches, page: body.page } satisfies Paged<SettlementBatchDto>;
   },
 
-  unattributedCredits: async (
-    params: Window & { runId?: string; channel?: 'wompi' | 'other' | 'all' } = {},
-  ) => {
+  unattributedCredits: async ({
+    runId,
+    ...params
+  }: Window & { runId?: string; channel?: 'wompi' | 'other' | 'all' } = {}) => {
     const body = await get<{ credits: UnattributedCreditDto[]; page: OffsetPageDto }>(
-      `/unattributed-credits${query({ ...params })}`,
+      `${scope(runId)}/unattributed-credits${query({ ...params })}`,
     );
     return { rows: body.credits, page: body.page } satisfies Paged<UnattributedCreditDto>;
   },
@@ -138,7 +151,7 @@ export const api = {
   lineage: (movementId: string) => get<LineageDto>(`/movements/${movementId}/lineage`),
 
   erpReconciliation: (journalKey: 'wompi' | 'bancolombia', params: { runId?: string } = {}) =>
-    get<ErpReconciliationDto>(`/erp-reconciliations/${journalKey}${query({ ...params })}`),
+    get<ErpReconciliationDto>(`${scope(params.runId)}/erp-reconciliations/${journalKey}`),
 
   /**
    * Crea en Odoo la corrección de una línea, en borrador.
@@ -146,8 +159,18 @@ export const api = {
    * Se manda la referencia, no el asiento: el servidor lo reconstruye desde su
    * propio reporte, así que este cliente no puede elegir cuenta ni monto.
    */
-  createErpEntry: (body: { journalKey: 'wompi' | 'bancolombia'; ref: string; runId?: string }) =>
-    post<{ entryId: string; ref: string }>('/erp-journal-entries', body),
+  createErpEntry: ({
+    runId,
+    ...body
+  }: {
+    journalKey: 'wompi' | 'bancolombia';
+    ref: string;
+    runId?: string;
+  }) =>
+    post<{ entryId: string; ref: string }>('/erp-journal-entries', {
+      ...body,
+      runId: runId ?? LATEST,
+    }),
 
   /**
    * Los asientos que este sistema ya dejó escritos en ese diario.
