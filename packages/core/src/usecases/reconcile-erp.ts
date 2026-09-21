@@ -44,6 +44,9 @@ export interface ReconcileErpInput {
   readonly settlements?: readonly MatchResult[];
 }
 
+/** Lo que el canal retiene en cada venta y el ledger no trae como movimiento. */
+const DEDUCTIONS = ['FEE', 'TAX', 'WITHHOLDING'] as const;
+
 /** La parte de las deducciones de una liquidación que le toca a una venta. */
 interface DeductionShare {
   readonly fee: Money;
@@ -170,33 +173,10 @@ export class ReconcileErp {
     const share = shareOf(group, shares);
     const match = assignment.get(group.key);
     if (match) {
-      const assessment = assessMatch(group, match, context);
-
-      // El asiento registra la venta al bruto y nada más. La venta coincide,
-      // pero Wompi se quedó una comisión, su IVA y una retención que ese asiento
-      // no dice: le faltan líneas. Se muestran, sin ofrecer escribirlas.
-      if (assessment.status === 'MATCHED' && share && !this.touchesDeductions(match.entry)) {
-        return {
-          status: 'INCOMPLETE_ENTRY',
-          matchLevel: match.level,
-          ledgerMovementIds: group.movements.map((movement) => movement.id),
-          erpEntryId: match.entry.id,
-          erpEntryName: match.entry.name,
-          erpEntryState: match.entry.state,
-          ...describe(group),
-          date: group.date,
-          ledgerAmount: assessment.ledgerAmount,
-          ...(assessment.erpAmount ? { erpAmount: assessment.erpAmount } : {}),
-          evidence: [
-            ...assessment.evidence,
-            evidence('INCOMPLETE_ENTRY', 'ERP', false, {
-              detail: 'faltan: FEE, TAX, WITHHOLDING',
-            }),
-            derivedEvidence(share),
-          ],
-          correction: missingLines(group, share, input.journalKey),
-        };
-      }
+      // Lo que Wompi retuvo cuenta como parte de lo que el asiento tendría que
+      // decir. Si no lo dice, assessMatch lo reporta como a cualquier concepto
+      // que falta, con su precedencia de siempre.
+      const assessment = assessMatch(group, match, context, share ? DEDUCTIONS : []);
 
       return {
         status: assessment.status,
@@ -210,8 +190,14 @@ export class ReconcileErp {
         ledgerAmount: assessment.ledgerAmount,
         ...(assessment.erpAmount ? { erpAmount: assessment.erpAmount } : {}),
         ...(assessment.delta ? { delta: assessment.delta } : {}),
-        evidence: assessment.evidence,
-        ...this.correctionFor(group, input.journalKey, 'INCOMPLETE_ENTRY', assessment.missingConcepts),
+        evidence: share ? [...assessment.evidence, derivedEvidence(share)] : assessment.evidence,
+        ...this.correctionFor(
+          group,
+          input.journalKey,
+          'INCOMPLETE_ENTRY',
+          assessment.missingConcepts,
+          share,
+        ),
       };
     }
 
@@ -254,6 +240,12 @@ export class ReconcileErp {
   ) {
     if (reason === 'INCOMPLETE_ENTRY' && missingConcepts.length === 0) return {};
     if (!this.isChannelMoney(group, journalKey)) return {};
+
+    // Lo que le falta a un asiento que ya existe son las deducciones: se
+    // muestran, no se escriben. Ver `missingLines`.
+    if (reason === 'INCOMPLETE_ENTRY' && share) {
+      return { correction: missingLines(group, share, journalKey) };
+    }
     if (group.concepts.some((concept) => !this.accountMap.isMapped(concept))) return {};
 
     // Un traspaso sólo se puede proponer si sabemos de qué otro libro salió.
@@ -326,13 +318,6 @@ export class ReconcileErp {
     return shares;
   }
 
-  /** Si el asiento ya tiene alguna línea de comisión, IVA o retención. */
-  private touchesDeductions(entry: ErpEntry): boolean {
-    const codes = (['FEE', 'TAX', 'WITHHOLDING'] as const)
-      .map((type) => this.accountMap.accountFor(type)?.code)
-      .filter((code): code is string => code !== undefined);
-    return entry.lines.some((line) => codes.includes(line.accountCode));
-  }
 
   /**
    * Si esta plata pasó por un canal que conciliamos.

@@ -50,7 +50,7 @@ const charge = (sale: typeof A) =>
     },
   });
 
-async function reconcile(withSettlements: boolean) {
+async function reconcile(withSettlements: boolean, entryGross = A.gross) {
   const [a, b] = [charge(A), charge(B)];
   const movements = new InMemoryMovementRepository();
   await movements.upsertMany([a, b]);
@@ -61,7 +61,7 @@ async function reconcile(withSettlements: boolean) {
     name: 'WMP/2026/00001',
     date: '2026-04-24',
     ref: A.ref,
-    lines: [erpLine('1110001', A.gross, 0, 'Wompi'), erpLine('420500', 0, A.gross, 'Otras Ventas')],
+    lines: [erpLine('1110001', entryGross, 0, 'Wompi'), erpLine('420500', 0, entryGross, 'Otras Ventas')],
   });
 
   // Lo que la fase 2 dejó para la liquidación: sólo lo que esta fase lee.
@@ -142,6 +142,26 @@ describe('las deducciones que le faltan a cada venta de Wompi', () => {
     expect(amountOfConcept(a.correction!, 'FEE').cents).toBeGreaterThan(
       amountOfConcept(b.correction!, 'FEE').cents,
     );
+  });
+
+  it('lo juzga assessMatch, con la evidencia de siempre', async () => {
+    const { a } = await reconcile(true);
+    const incomplete = a.evidence.find((item) => item.code === 'INCOMPLETE_ENTRY')!;
+
+    // Lo esperado incluye las cuentas de las deducciones, y lo observado las
+    // dos que el asiento tiene: es el chequeo de completitud, no uno aparte.
+    expect(incomplete.expected).toContain('530505');
+    expect(incomplete.observed).toBe('1110001, 420500');
+  });
+
+  it('con monto distinto también, nombra las líneas que faltan como la causa', async () => {
+    // Antes esto salía «monto distinto» y las deducciones no aparecían: el
+    // chequeo vivía afuera de assessMatch y sólo corría si el par coincidía.
+    const { a } = await reconcile(true, A.gross + 50_000);
+
+    expect(a.status).toBe('INCOMPLETE_ENTRY');
+    expect(a.evidence.map((item) => item.code)).toContain('AMOUNT_MISMATCH_ERP');
+    expect(conceptsOf(a.correction!)).toEqual(['FEE', 'TAX', 'WITHHOLDING']);
   });
 
   it('sin resultados de la fase 2 no inventa nada: el asiento queda conciliado', async () => {
