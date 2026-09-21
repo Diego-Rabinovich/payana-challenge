@@ -57,15 +57,22 @@ If the bytes come from a file or from an HTTP API, reuse what is there.
 
 ### 4. Wire it
 
-Nothing is discovered automatically. In `composition.ts`: the source's account
-and source ids, a connector instance and a parser instance — a reused connector
-class still needs its own instance, because the instance carries the source id.
+Two lines in `composition.ts`: a connector in `registryOf([...])` and a parser in
+`parserRegistryOf([...])`, each carrying its own id. A reused connector class
+still needs its own instance, because the instance is what carries the source
+id. The run pipeline ingests every registered connector, so that is all it
+takes for the source to be read.
 
-Then add the source id to the ingest loop in `runPipeline` (`read-model.ts`),
-which lists sources by hand. If the source is a new sales channel to reconcile
-against the bank, it also needs its `settlement` and `deductions` block in
-`config/ruleset.v1.json` and its own `reconcileFlow` call in `runPipeline`,
-which today is written for Wompi.
+```ts
+new LocalFileConnector(sourceId('uber:orders'), ordersDir, '.csv'),   // registryOf
+new UberOrderParser(accountId('uber:AA')),                            // parserRegistryOf
+```
+
+A third line if it should appear in the console: its account in the list
+`buildReadModel` serves at `/accounts`, which is still written by hand. And if
+it is a new sales channel to reconcile against the bank, it also needs its
+`settlement` and `deductions` block in `config/ruleset.v1.json` and its own
+`reconcileFlow` call in `runPipeline`, which today is written for Wompi.
 
 ### 5. If it brings new concepts
 
@@ -89,14 +96,14 @@ test of a canonical model is that a new source does not extend it.
 git diff --stat
 ```
 
-Only `packages/adapters/src/<source>/`, a few lines of `composition.ts` and
-`read-model.ts`, its descriptors in `config/descriptors.json` and the tests
-should appear. Anything else — core, the pipeline, the API, the frontend, the rules —
+Only `packages/adapters/src/<source>/`, two lines of `composition.ts` (three
+if it is listed in the console), its descriptors in `config/descriptors.json`
+and the tests should appear. Anything else — core, the pipeline, the API, the frontend, the rules —
 means the canonical model fell short, and that is an ADR, not a patch.
 
 | Piece | Lines |
 |---|---:|
 | `RecordParser` | ~80 |
 | `SourceConnector`, only if the transport is new | ~40 |
-| `composition.ts` + `read-model.ts` | ~5 |
+| Wiring (`composition.ts`, and the accounts list) | 2–3 |
 | Tests | ~60 |

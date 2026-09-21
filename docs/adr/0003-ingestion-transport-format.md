@@ -28,9 +28,9 @@ Sources are declared in `config/sources.json`, not in code.
 
 > **Correction (2026-09-21).** The declarative half of this decision was never
 > built. `config/sources.json` existed and was never read: connectors and
-> parsers are constructed in `composition.ts`, and `runPipeline` lists the
-> sources it ingests, so a new source is wired by hand in both — a few lines,
-> not a config entry. The file was removed rather than kept as
+> parsers are constructed in `composition.ts`, and the run pipeline ingests
+> every registered connector, so a new source is two lines there — its
+> connector and its parser — not a config entry. The file was removed rather than kept as
 > documentation that looked like configuration. The separation of transport
 > from format — the substance of this ADR — stands and is what the code does.
 
