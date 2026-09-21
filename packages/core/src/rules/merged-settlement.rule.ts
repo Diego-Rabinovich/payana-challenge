@@ -4,7 +4,7 @@ import { Money } from '../domain/money.js';
 import type { Movement } from '../domain/movement.js';
 import type { SettlementBatch } from '../domain/settlement-batch.js';
 import type { Candidate, MatchingContext, MatchingRule } from './matching-rule.js';
-import { eligibleDeposits, expectedTotal, describeAmounts } from './settlement-evidence.js';
+import { eligibleDeposits, describeAmounts } from './settlement-evidence.js';
 
 /**
  * Two batches that the gateway paid in a single transfer.
@@ -17,16 +17,7 @@ import { eligibleDeposits, expectedTotal, describeAmounts } from './settlement-e
  * not competing candidates; they were batches whose money had arrived inside
  * somebody else's credit, and they were being filed as "unmatched" as though
  * nothing were known about them.
- *
- * In the real data: the 21 and 23 February batches total $29.414.683, and the
- * $28.145.645,23 credited on the 24th is 4,31% below that — the channel's
- * usual commission, to the point. Neither batch can claim the credit on its
- * own and neither should, so this rule claims nothing. It produces a candidate
- * with no deposits, which can never win, carrying the evidence that says where
- * the money went. The batch still comes out UNMATCHED — it is: nothing can be
- * attributed to it — but with the explanation attached instead of a shrug.
- * Calling it AMBIGUOUS would claim there were several answers, when there is
- * exactly one we cannot book.
+
  *
  * Attributing the credit properly would mean letting one result span several
  * batches, which `MatchResult` cannot express today. Saying so is better than
@@ -55,20 +46,21 @@ export class MergedSettlementRule implements MatchingRule {
         neighbours.some((other) => eligibleDeposits(other, deposits, context).includes(deposit)),
     );
 
+    // Todas las combinaciones que cierran, no la primera que aparezca. Antes
+    // se devolvía la primera, así que con dos créditos dentro de la banda la
+    // explicación dependía del orden en que llegaban los datos.
+    const [low, high] = context.ruleSet.admissibleFeeBandFor(context.channel);
+    const fits: Fit[] = [];
     for (const other of neighbours) {
       const combined = batch.gross.plus(other.gross);
-      const { toleranceCents } = expectedTotal(batch, context.ruleSet, context.channel);
-      const [low, high] = context.ruleSet.admissibleFeeBandFor(context.channel);
-
       for (const deposit of reachable) {
         const rate = 1 - deposit.amount.cents / combined.cents;
-        if (rate < low || rate > high) continue;
-        void toleranceCents;
-
-        return [this.explain(batch, other, deposit, combined, rate)];
+        if (rate >= low && rate <= high) fits.push({ other, deposit, combined, rate });
       }
     }
-    return [];
+
+    const best = fits.sort(closestTo((low + high) / 2))[0];
+    return best ? [this.explain(batch, best.other, best.deposit, best.combined, best.rate)] : [];
   }
 
   private explain(
@@ -88,11 +80,27 @@ export class MergedSettlementRule implements MatchingRule {
           detail:
             `parece haberse cobrado junto con el corte del ${other.batchDate.toString()}: ` +
             `los dos suman ${combined.toString()} y el crédito está ` +
-            `${(rate * 100).toFixed(2).replace('.', ',')}% por debajo, la comisión habitual`,
+            `${(rate * 100).toFixed(2).replace('.', ',')}% por debajo, dentro de lo que el ` +
+            `canal puede cobrar`,
         }),
       ],
     };
   }
+}
+
+interface Fit {
+  readonly other: SettlementBatch;
+  readonly deposit: Movement;
+  readonly combined: Money;
+  readonly rate: number;
+}
+
+function closestTo(middle: number) {
+  return (a: Fit, b: Fit): number =>
+    Math.abs(a.rate - middle) - Math.abs(b.rate - middle) ||
+    Temporal.PlainDate.compare(a.deposit.valueDate, b.deposit.valueDate) ||
+    (a.deposit.id < b.deposit.id ? -1 : a.deposit.id > b.deposit.id ? 1 : 0) ||
+    Temporal.PlainDate.compare(a.other.batchDate, b.other.batchDate);
 }
 
 function withinDays(a: Temporal.PlainDate, b: Temporal.PlainDate, days: number): boolean {

@@ -185,6 +185,48 @@ describe('two batches paid in one transfer', () => {
     expect(merged!.detail).toContain('4,31%');
   });
 
+  it('picks the best-fitting credit, whatever order the credits arrive in', async () => {
+    // Dos créditos entran en la banda admisible (4–5%): uno al 4,31% y otro al
+    // 4,95%. Antes ganaba el primero que aparecía; ahora gana el más cerca del
+    // centro de la banda, y eso no puede depender del orden de los datos.
+    const { MergedSettlementRule } = await import('../src/rules/merged-settlement.rule.js');
+    const ruleSet = testRuleSet();
+
+    const batchOf = (iso: string, cents: number) =>
+      buildSettlementBatches({ calendar: CAL, accountId: WOMPI_ACCOUNT, movements: [charge(iso, cents)] })[0]!;
+    const first = batchOf('2026-02-20', 2_593_689_600);
+    const second = batchOf('2026-02-23', 347_778_700);
+
+    const credit = (id: string, cents: number) =>
+      aMovement({
+        accountId: WOMPI_ACCOUNT,
+        externalId: id,
+        valueDate: date('2026-02-24'),
+        type: 'TRANSFER_IN',
+        amount: Money.ofCents(cents),
+        description: 'PAGO DE PROV WOMPI S.A.S.',
+        counterparty: 'WOMPI S.A.S.',
+      });
+    const cerca = credit('cerca', 2_814_564_523); // 4,31%
+    const lejos = credit('lejos', 2_795_847_645); // 4,95%
+
+    const detailFor = (deposits: ReturnType<typeof credit>[]) =>
+      new MergedSettlementRule()
+        .evaluate(second, deposits, {
+          calendar: CAL,
+          ruleSet,
+          channel: 'wompi',
+          policy: ruleSet.settlementPolicyFor('wompi'),
+          batches: [first, second],
+        })[0]!
+        .evidence.find((item) => item.code === 'SETTLEMENT_MERGED')!.detail;
+
+    expect(detailFor([lejos, cerca])).toContain('4,31%');
+    expect(detailFor([cerca, lejos])).toContain('4,31%');
+    // Y no le dice «habitual» a algo que sólo se comparó contra lo posible.
+    expect(detailFor([cerca])).not.toContain('habitual');
+  });
+
   it('stays quiet when a batch settles on its own', async () => {
     const { MergedSettlementRule } = await import('../src/rules/merged-settlement.rule.js');
     const ruleSet = testRuleSet();
