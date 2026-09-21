@@ -127,6 +127,7 @@ export function toProposedEntryDto(
     date: entry.date,
     reason: correction.reason,
     missingConcepts: [...correction.missingConcepts],
+    writable: !correction.readOnly,
     lines: entry.lines.map((line) => ({
       accountCode: line.accountCode,
       accountName: line.accountName,

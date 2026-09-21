@@ -42,6 +42,11 @@ export function ProposedEntryTable({
   const negative = entry.lines.some((line) => line.debit.cents < 0 || line.credit.cents < 0);
   const balanced = !negative && debits === credits;
 
+  // Las líneas que le faltan a un asiento que ya existe se muestran, pero no
+  // se ofrecen para escribir: agregarle líneas a un asiento contabilizado es
+  // decisión de un contador.
+  const readOnly = !entry.writable;
+
   const [trabajando, setTrabajando] = useState(false);
   const [recienCreado, setRecienCreado] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +93,7 @@ export function ProposedEntryTable({
         <span className="muted">
           diario {entry.journalId} · {entry.date}
         </span>
+        {readOnly && <span className="chip chip--neutral">sólo para mostrar</span>}
       </header>
 
       {entry.missingConcepts.length > 0 && (
@@ -130,6 +136,14 @@ export function ProposedEntryTable({
         </table>
       </div>
 
+      {readOnly ? (
+        <p className="faint" style={{ marginTop: 10 }}>
+          Las líneas que le faltan a este asiento, sólo para mostrar: no se escriben en Odoo desde
+          acá. Los montos son derivados — la comisión de la liquidación, prorrateada por bruto — con
+          el IVA y la retención de ley.
+        </p>
+      ) : (
+        <>
       <div
         style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}
       >
@@ -193,6 +207,8 @@ export function ProposedEntryTable({
         de cuentas que nos dieron. Volver a apretarlo no duplica: la referencia{' '}
         <code>{entry.ref}</code> es la clave de idempotencia y se busca antes de escribir.
       </p>
+        </>
+      )}
     </div>
   );
 }

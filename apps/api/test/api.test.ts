@@ -116,6 +116,17 @@ describe('HTTP API', () => {
     expect(report.headers['content-type']).toContain('application/json');
   });
 
+  it('refuses to create a correction that is only for display', async () => {
+    // Las líneas que le faltan a un asiento existente llevan referencia ded:,
+    // y el contrato de la ruta sólo acepta mov:. Ni armando el request a mano.
+    const response = await app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/erp-journal-entries`,
+      payload: { journalKey: 'wompi', ref: 'ded:mov_0123456789abcdef', runId: 'latest' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it('does not promise a format it cannot produce', async () => {
     // ndjson figuraba en el esquema y devolvía 404: ahora es un 400 honesto.
     expect((await get('/runs/run_1/report?format=ndjson')).statusCode).toBe(400);

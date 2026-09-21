@@ -116,6 +116,9 @@ export const ProposedEntryDto = z.object({
   date: IsoDate,
   reason: z.enum(['MISSING_ENTRY', 'INCOMPLETE_ENTRY']),
   missingConcepts: z.array(MovementTypeDto),
+  writable: z
+    .boolean()
+    .describe('Falso cuando es sólo para mostrar: las líneas que le faltan a un asiento que ya existe'),
   lines: z.array(
     z.object({
       accountCode: z.string(),

@@ -120,6 +120,7 @@ describe('ProposedEntryTable (F05-T05)', () => {
     journalId: 48,
     date: '2026-04-24',
     reason: 'INCOMPLETE_ENTRY',
+    writable: true,
     missingConcepts: ['FEE', 'TAX', 'WITHHOLDING'],
     lines: [
       { accountCode: '1110001', accountName: 'Wompi Tarjetas', debit: money(30_342_952), credit: money(0), label: 'Neto' },
@@ -157,6 +158,19 @@ describe('ProposedEntryTable (F05-T05)', () => {
     render(<ProposedEntryTable entry={entry} journalKey="wompi" />);
     expect(screen.getByText(/borrador/)).toBeDefined();
     expect(screen.getByText(/idempotencia/)).toBeDefined();
+  });
+
+  it('las líneas que le faltan a un asiento existente se muestran, sin botón', () => {
+    // Agregarle líneas a un asiento contabilizado es decisión de un contador:
+    // la corrección se ve, pero no se ofrece escribirla.
+    render(
+      <MemoryRouter>
+        <ProposedEntryTable entry={{ ...entry, writable: false }} journalKey="wompi" />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole('button', { name: /Crear asiento/ })).toBeNull();
+    expect(screen.getByText('sólo para mostrar')).toBeDefined();
   });
 
   it('cuando el asiento ya existe ofrece deshacerlo, no volver a crearlo', () => {
