@@ -38,6 +38,16 @@ export interface ErpCorrection {
   /** Concepts the existing entry lacks. Empty when the entry is absent entirely. */
   readonly missingConcepts: readonly MovementType[];
   readonly lines: readonly CorrectionLine[];
+  /**
+   * El otro libro nuestro donde está la otra mitad, cuando la hay.
+   *
+   * Un traspaso no se explica solo: la plata que entró al banco salió de
+   * algún lado, y en este caso salió de un diario que también llevamos. Quién
+   * es ese otro lado es una conclusión de la conciliación — se lee de la
+   * contraparte del documento —, no una convención contable, así que se decide
+   * acá y el adapter sólo la traduce a débito y crédito.
+   */
+  readonly counterpartJournalKey?: string;
   /** What actually moved into the account: gross less every deduction. */
   readonly netToAccount: Money;
 }
@@ -57,6 +67,7 @@ export function buildCorrection(input: {
   readonly journalKey: string;
   readonly reason: CorrectionReason;
   readonly missingConcepts?: readonly MovementType[];
+  readonly counterpartJournalKey?: string;
 }): ErpCorrection {
   const { movements, journalKey, reason } = input;
   if (movements.length === 0) {
@@ -77,6 +88,9 @@ export function buildCorrection(input: {
     date: anchor.valueDate,
     reason,
     missingConcepts: input.missingConcepts ?? [],
+    ...(input.counterpartJournalKey
+      ? { counterpartJournalKey: input.counterpartJournalKey }
+      : {}),
     lines,
     // Signed sum: charges add, deductions subtract. The result is what the
     // account should have received.
@@ -84,13 +98,39 @@ export function buildCorrection(input: {
   };
 }
 
+/**
+ * True when the correction is only money moving between accounts.
+ *
+ * No hay venta ni deducciones que explicar: la identidad que hace cuadrar un
+ * asiento de Wompi no aplica, y el asiento son dos líneas — de dónde salió y
+ * a dónde entró.
+ */
+export function isTransferOnly(correction: ErpCorrection): boolean {
+  return correction.lines.every(
+    (line) => line.concept === 'TRANSFER_IN' || line.concept === 'TRANSFER_OUT',
+  );
+}
+
 /** Total of one concept across the correction, as a positive magnitude. */
 export function amountOfConcept(correction: ErpCorrection, concept: MovementType): Money {
+  return signedAmountOfConcept(correction, concept).abs();
+}
+
+/**
+ * Lo mismo, conservando el signo.
+ *
+ * Hace falta porque un concepto puede ir para los dos lados: una comisión que
+ * el banco cobra sale de la cuenta, y el reverso de esa misma comisión vuelve.
+ * Tomar el valor absoluto y suponer el lado convertía un reverso en un asiento
+ * con las dos líneas al débito.
+ */
+export function signedAmountOfConcept(
+  correction: ErpCorrection,
+  concept: MovementType,
+): Money {
   return Money.sum(
-    correction.lines
-      .filter((line) => line.concept === concept)
-      .map((line) => line.amount),
-  ).abs();
+    correction.lines.filter((line) => line.concept === concept).map((line) => line.amount),
+  );
 }
 
 /** Every concept the correction touches, in the order it first appears. */

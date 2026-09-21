@@ -135,3 +135,164 @@ describe('toJournalEntry', () => {
     expect(entryBalances(toJournalEntry(traced, CHART))).toBe(true);
   });
 });
+
+/**
+ * Un traspaso entre dos libros nuestros.
+ *
+ * No hay venta ni deducciones: la identidad que hace cuadrar un asiento de
+ * Wompi no aplica acá. Mientras el constructor asumió esa forma para todo, un
+ * crédito del banco salía con una sola línea y no cuadraba.
+ */
+describe('toJournalEntry, cuando la corrección es un traspaso', () => {
+  const DOS_LIBROS = AccountMap.from({
+    journals: {
+      wompi: { id: 48, name: 'Wompi Tarjetas', mainAccount: '1110001' },
+      bancolombia: { id: 49, name: 'Bancolombia', mainAccount: '111001' },
+    },
+    accounts: {
+      TRANSFER_IN: { code: '111001', name: 'Banco' },
+      TRANSFER_OUT: { code: '111001', name: 'Banco' },
+    },
+  });
+
+  const ENTRA = 36_539_335;
+
+  const traspaso = (cents: number): ErpCorrection => ({
+    ref: 'mov:mov_3fd218c4ab77756b',
+    journalKey: 'bancolombia',
+    counterpartJournalKey: 'wompi',
+    date: Temporal.PlainDate.from('2026-01-15'),
+    reason: 'MISSING_ENTRY',
+    missingConcepts: [],
+    lines: [
+      {
+        concept: cents > 0 ? 'TRANSFER_IN' : 'TRANSFER_OUT',
+        amount: Money.ofCents(cents),
+        label: 'PAGO DE PROV WOMPI S.A.S.',
+      },
+    ],
+    netToAccount: Money.ofCents(cents),
+  });
+
+  it('lo arma como los que ya tiene ese diario: al banco débito, a Wompi crédito', () => {
+    const entry = toJournalEntry(traspaso(ENTRA), DOS_LIBROS);
+
+    expect(entryBalances(entry)).toBe(true);
+    expect(entry.lines).toHaveLength(2);
+    expect(entry.lines[0]).toMatchObject({ accountCode: '111001' });
+    expect(entry.lines[0]!.debit.cents).toBe(ENTRA);
+    expect(entry.lines[1]).toMatchObject({ accountCode: '1110001' });
+    expect(entry.lines[1]!.credit.cents).toBe(ENTRA);
+  });
+
+  it('si la plata sale, los lados se dan vuelta', () => {
+    const entry = toJournalEntry(traspaso(-ENTRA), DOS_LIBROS);
+
+    expect(entryBalances(entry)).toBe(true);
+    expect(entry.lines[0]!.credit.cents).toBe(ENTRA);
+    expect(entry.lines[1]!.debit.cents).toBe(ENTRA);
+  });
+
+  it('sin el otro libro no arma medio asiento: no arma ninguno', () => {
+    const { counterpartJournalKey: _, ...huerfano } = traspaso(ENTRA);
+    const entry = toJournalEntry(huerfano, DOS_LIBROS);
+
+    expect(entry.lines).toHaveLength(0);
+  });
+});
+
+/**
+ * Un cobro del banco: plata que sale, no que entra.
+ *
+ * El constructor daba por hecho que el neto siempre entra y lo ponía al
+ * débito, así que un cobro salía como un débito de −$270 contra otro de $270.
+ * Los dos suman cero, el control de cuadratura lo dejaba pasar, y lo que se
+ * hubiera escrito no era un asiento.
+ */
+describe('toJournalEntry, cuando la plata sale de la cuenta', () => {
+  const COBRO = 27_000;
+
+  const cobro: ErpCorrection = {
+    ref: 'mov:mov_7ac1f0de4b2299a3',
+    journalKey: 'wompi',
+    date: Temporal.PlainDate.from('2026-01-15'),
+    reason: 'MISSING_ENTRY',
+    missingConcepts: [],
+    lines: [
+      { concept: 'FEE', amount: Money.ofCents(-COBRO), label: 'SERVICIO E-MAILS ENVIADOS' },
+    ],
+    netToAccount: Money.ofCents(-COBRO),
+  };
+
+  it('lo pone al crédito de la cuenta, no como un débito negativo', () => {
+    const entry = toJournalEntry(cobro, CHART);
+
+    expect(entry.lines[0]).toMatchObject({ accountCode: '1110001' });
+    expect(entry.lines[0]!.credit.cents).toBe(COBRO);
+    expect(entry.lines[0]!.debit.cents).toBe(0);
+    expect(entry.lines[1]).toMatchObject({ accountCode: '530505' });
+    expect(entry.lines[1]!.debit.cents).toBe(COBRO);
+    expect(entryBalances(entry)).toBe(true);
+  });
+
+  it('un importe negativo no cuadra aunque los totales den cero', () => {
+    const torcido = {
+      ref: 'x',
+      journalId: 48,
+      date: '2026-01-15',
+      lines: [
+        {
+          accountCode: '1110001',
+          accountName: 'Wompi',
+          debit: Money.ofCents(-COBRO),
+          credit: Money.zero(),
+          label: 'neto',
+        },
+        {
+          accountCode: '530505',
+          accountName: 'Gastos',
+          debit: Money.ofCents(COBRO),
+          credit: Money.zero(),
+          label: 'comisión',
+        },
+      ],
+    };
+
+    expect(totalDebits(torcido).cents).toBe(totalCredits(torcido).cents);
+    expect(entryBalances(torcido)).toBe(false);
+  });
+});
+
+/**
+ * El banco cobra una cuota de manejo y después la reversa.
+ *
+ * Es el mismo concepto que un cobro, con el signo al revés. Mientras el
+ * constructor tomó el valor absoluto y supuso el lado, el reverso salía con
+ * las dos líneas al débito: $5.853,21 contra $5.853,21, y el asiento no
+ * cuadraba.
+ */
+describe('toJournalEntry, cuando el banco reversa un cobro', () => {
+  const REVERSO = 585_321;
+
+  const reverso: ErpCorrection = {
+    ref: 'mov:mov_51ba9c3de07f4412',
+    journalKey: 'wompi',
+    date: Temporal.PlainDate.from('2026-02-27'),
+    reason: 'MISSING_ENTRY',
+    missingConcepts: [],
+    lines: [
+      { concept: 'FEE', amount: Money.ofCents(REVERSO), label: 'REV CUOTA MANEJO TARJETA PREPA' },
+    ],
+    netToAccount: Money.ofCents(REVERSO),
+  };
+
+  it('devuelve la plata a la cuenta y acredita el gasto', () => {
+    const entry = toJournalEntry(reverso, CHART);
+
+    expect(entry.lines[0]!.debit.cents).toBe(REVERSO);
+    expect(entry.lines[1]).toMatchObject({ accountCode: '530505' });
+    expect(entry.lines[1]!.credit.cents).toBe(REVERSO);
+    expect(entry.lines[1]!.debit.cents).toBe(0);
+    expect(entryBalances(entry)).toBe(true);
+  });
+});

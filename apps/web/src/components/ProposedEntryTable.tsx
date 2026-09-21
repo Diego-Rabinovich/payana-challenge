@@ -37,7 +37,10 @@ export function ProposedEntryTable({
 }) {
   const debits = entry.lines.reduce((total, line) => total + line.debit.cents, 0);
   const credits = entry.lines.reduce((total, line) => total + line.credit.cents, 0);
-  const balanced = debits === credits;
+  // Dos importes negativos que suman cero no son un asiento que cuadre, y el
+  // servidor lo va a rechazar igual: mejor no ofrecer el botón.
+  const negative = entry.lines.some((line) => line.debit.cents < 0 || line.credit.cents < 0);
+  const balanced = !negative && debits === credits;
 
   const [trabajando, setTrabajando] = useState(false);
   const [recienCreado, setRecienCreado] = useState(false);

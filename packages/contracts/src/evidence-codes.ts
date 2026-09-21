@@ -47,6 +47,7 @@ export const EvidenceCodeDto = z.enum([
   'MISSING_IN_LEDGER',
   'DUPLICATE_IN_ERP',
   'NO_ACCOUNT_MAPPING',
+  'NO_CONTRA_ACCOUNT',
 
   // —— Phase 1: ingestion
   'BALANCE_CHAIN_OK',
@@ -112,6 +113,7 @@ export const EVIDENCE_DIMENSIONS: Readonly<Record<EvidenceCode, EvidenceDimensio
   MISSING_IN_LEDGER: 'ERP',
   DUPLICATE_IN_ERP: 'ERP',
   NO_ACCOUNT_MAPPING: 'ERP',
+  NO_CONTRA_ACCOUNT: 'ERP',
   BALANCE_CHAIN_OK: 'INGESTION',
   BALANCE_CHAIN_BROKEN: 'INGESTION',
   SUMMARY_TOTALS_OK: 'INGESTION',

@@ -14,6 +14,7 @@ import type { AccountId, RunId } from '../domain/ids.js';
 import { Money } from '../domain/money.js';
 import { buildCorrection } from '../domain/erp-correction.js';
 import type { ErpGateway } from '../ports/erp-gateway.js';
+import type { RuleSet } from '../domain/ruleset.js';
 import type { MovementRepository } from '../ports/repositories.js';
 import type { DateRange } from '../ports/source-connector.js';
 import { ErpEntryIndex } from '../rules/erp-entry-index.js';
@@ -36,6 +37,13 @@ export interface ReconcileErpInput {
 
 export interface ReconcileErpOptions {
   readonly dateShiftBusinessDays?: number;
+  /**
+   * Para saber de quién es una contraparte.
+   *
+   * Sin esto un traspaso no se puede proponer como asiento: sabríamos que
+   * entró plata al banco y no contra qué cuenta va la otra mitad.
+   */
+  readonly ruleSet?: RuleSet;
 }
 
 /**
@@ -176,6 +184,7 @@ export class ReconcileErp {
           detail: `diario ${context.journal.name}`,
         }),
         ...this.unmappedEvidence(group, context),
+        ...this.contraEvidence(group, input.journalKey),
       ],
       ...this.correctionFor(group, input.journalKey, 'MISSING_ENTRY', []),
     };
@@ -199,14 +208,55 @@ export class ReconcileErp {
     if (reason === 'INCOMPLETE_ENTRY' && missingConcepts.length === 0) return {};
     if (group.concepts.some((concept) => !this.accountMap.isMapped(concept))) return {};
 
+    // Un traspaso sólo se puede proponer si sabemos de qué otro libro salió.
+    // Sin contrapartida el asiento tendría una sola línea, no cuadraría, y
+    // ofrecerlo sería ofrecer algo que Odoo no aceptaría.
+    const transfer = group.concepts.every(
+      (concept) => concept === 'TRANSFER_IN' || concept === 'TRANSFER_OUT',
+    );
+    const counterpart = transfer ? this.counterpartJournalOf(group, journalKey) : undefined;
+    if (transfer && counterpart === undefined) return {};
+
     return {
       correction: buildCorrection({
         movements: group.movements,
         journalKey,
         reason,
         missingConcepts,
+        ...(counterpart ? { counterpartJournalKey: counterpart } : {}),
       }),
     };
+  }
+
+  /**
+   * El otro diario nuestro que participa de un traspaso.
+   *
+   * Sale de la contraparte que dice el documento, no de suponer que los dos
+   * únicos libros del plan son las dos puntas: un crédito de un tercero entra
+   * al banco igual que uno de Wompi, y sólo uno de los dos tiene otra mitad
+   * que nosotros llevemos.
+   */
+  private counterpartJournalOf(group: LedgerGroup, journalKey: string): string | undefined {
+    const counterparty = group.movements.find((movement) => movement.counterparty)?.counterparty;
+    const channel = this.options.ruleSet?.channelFor(counterparty);
+    if (channel === undefined || channel === journalKey) return undefined;
+    return this.accountMap.journal(channel) ? channel : undefined;
+  }
+
+  /** Por qué un traspaso no trae asiento propuesto: no sabemos la contrapartida. */
+  private contraEvidence(group: LedgerGroup, journalKey: string) {
+    const transfer = group.concepts.every(
+      (concept) => concept === 'TRANSFER_IN' || concept === 'TRANSFER_OUT',
+    );
+    if (!transfer || this.counterpartJournalOf(group, journalKey) !== undefined) return [];
+
+    const counterparty = group.movements.find((movement) => movement.counterparty)?.counterparty;
+    return [
+      evidence('NO_CONTRA_ACCOUNT', 'ERP', false, {
+        observed: counterparty ?? 'origen desconocido',
+        detail: 'no es una fuente conectada',
+      }),
+    ];
   }
 
   private unmappedEvidence(group: LedgerGroup, { accountMap }: ErpMatchContext) {

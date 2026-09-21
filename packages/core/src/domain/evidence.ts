@@ -45,6 +45,7 @@ export const EVIDENCE_CODES = [
   'MISSING_IN_LEDGER',
   'DUPLICATE_IN_ERP',
   'NO_ACCOUNT_MAPPING',
+  'NO_CONTRA_ACCOUNT',
 
   // —— Phase 1: ingestion
   'BALANCE_CHAIN_OK',

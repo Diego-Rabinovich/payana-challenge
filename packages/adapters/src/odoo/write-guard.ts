@@ -85,6 +85,16 @@ export function assertCreatable(draft: JournalEntryDraft, policy: WritePolicy): 
     throw new WriteRefused('Un asiento sin líneas no corrige nada', { ref: draft.ref });
   }
 
+  const negativas = draft.lines.filter(
+    (line) => line.debit.cents < 0 || line.credit.cents < 0,
+  );
+  if (negativas.length > 0) {
+    throw new WriteRefused('Un asiento no lleva importes negativos: el signo elige el lado', {
+      ref: draft.ref,
+      cuentas: negativas.map((line) => line.accountCode),
+    });
+  }
+
   const debits = draft.lines.reduce((total, line) => total + line.debit.cents, 0);
   const credits = draft.lines.reduce((total, line) => total + line.credit.cents, 0);
   if (debits !== credits) {

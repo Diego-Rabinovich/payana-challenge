@@ -50,6 +50,8 @@ const PHRASES: Readonly<Record<EvidenceCode, Phrase>> = {
   MISSING_IN_ERP: (e) => `Esta transacción no tiene asiento${e.detail ? ` en el ${e.detail}` : ''}.`,
   MISSING_IN_LEDGER: (e) => `El asiento ${e.observed ?? ''} no corresponde a ningún movimiento ingestado.`,
   DUPLICATE_IN_ERP: (e) => `Hay ${e.observed ?? 'varios'} asientos que representan el mismo movimiento.`,
+  NO_CONTRA_ACCOUNT: (e) =>
+    `Es un traspaso de ${e.observed ?? 'un tercero'}, que no es una fuente conectada: no sabemos contra qué cuenta va la otra mitad del asiento.`,
   NO_ACCOUNT_MAPPING: (e) => `${e.observed ?? 'Este concepto'} no tiene cuenta asignada en el plan del challenge.`,
 
   // —— Ingestion

@@ -145,6 +145,21 @@ export class RuleSet {
     return patterns.some((pattern) => haystack.includes(pattern.toUpperCase()));
   }
 
+  /**
+   * A qué canal pertenece una contraparte, si es que pertenece a alguno.
+   *
+   * Es la misma decisión que `isChannelCounterparty`, preguntada al revés.
+   * Hace falta para saber de qué otro libro sale la plata de un traspaso:
+   * "PAGO DE PROV WOMPI S.A.S." en el banco es la otra mitad de un asiento
+   * del diario de Wompi, y "PAGO INTERBANC DRUO SAS" no es la otra mitad de
+   * nada que conozcamos.
+   */
+  channelFor(counterparty: string | undefined): string | undefined {
+    return Object.keys(this.config.channels).find((channel) =>
+      this.isChannelCounterparty(channel, counterparty),
+    );
+  }
+
   /** True when the counterparty is recognisably someone else's. */
   isForeignCounterparty(channel: string, counterparty: string | undefined): boolean {
     if (counterparty === undefined) return false;

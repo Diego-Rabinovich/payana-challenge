@@ -175,7 +175,9 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
         new SplitSettlementRule(),
         new MergedSettlementRule(),
       ]),
-      reconcileErp: new ReconcileErp(erp, repositories.movements, accountMap, calendar),
+      reconcileErp: new ReconcileErp(erp, repositories.movements, accountMap, calendar, undefined, {
+        ruleSet,
+      }),
     },
     close: () => db.close(),
   };
