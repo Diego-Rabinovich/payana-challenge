@@ -21,7 +21,7 @@ Half an hour of work, read without installing anything, and an explicit bonus in
 | Commands | `make demo`, `make check`, `make up` |
 | Conventions | Integer cents, `Temporal` dates, config over constants, evidence codes over prose |
 | Boundaries that will fail the build | `apps/web` may import only `@aa/contracts`; `core` takes no npm dependency but the Temporal polyfill |
-| What must not be touched | Wompi's events URL, private key rotation, unscrubbed PII, writing to Odoo without `--confirm` |
+| What must not be touched | Wompi's events URL, private key rotation, unscrubbed PII, writing to Odoo outside the two sandbox journals |
 
 **Acceptance:** an agent given only this file can run the test suite, add a parser and explain a match without reading the ADRs.
 
@@ -58,7 +58,7 @@ The agent asks for what it needs. That is the whole benefit; the protocol itself
 
 1. **No tool computes anything.** Every one reads a result already produced deterministically. A model must never be in the path where an amount is decided.
 2. **Tools return the same DTOs as the API.** No parallel schemas: the Zod definitions in `@aa/contracts` are what make this cheap.
-3. **No write tools.** `PostMissingEntries` is not exposed. Creating entries in a production ERP does not belong one prompt away; it stays in the CLI behind `--confirm`, where a human typed it.
+3. **No write tools.** `PostMissingEntries` is not exposed. Creating entries in a production ERP does not belong one prompt away; it stays in the console, behind a button a person pressed.
 
 ### Tests
 

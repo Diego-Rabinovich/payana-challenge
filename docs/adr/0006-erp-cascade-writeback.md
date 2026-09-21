@@ -30,7 +30,7 @@ Level 1 is handed to us by the data: entries are named `WMP/2026/00001 (TKFGJOKO
 To report *"this entry is missing its fee, VAT and withholding lines"*, the system must already know exactly which lines should exist, against which account, for which amount. That object exists either way. So every discrepancy carries a **`proposedEntry`**: accounts, debits, credits and `ref`.
 
 - **Required deliverable:** the reconciliation prints `proposedEntry` in `report.md` and emits it structured in `report.json`.
-- **Optional:** `PostMissingEntries` takes those same objects and calls `create`. Dry-run by default, `--confirm` to execute, `ref = mov:<movementId>` as idempotency key (Stripe's pattern), entries created as **draft**.
+- **Optional:** `PostMissingEntries` takes those same objects and calls `create`. Off unless `ODOO_WRITE_ENABLED`, one entry per button press in the console, `ref = mov:<movementId>` as idempotency key (Stripe's pattern), entries created as **draft**.
 
 **4. Existing entries are never modified or deleted.** Discrepancies are reported. Correcting is a human decision.
 

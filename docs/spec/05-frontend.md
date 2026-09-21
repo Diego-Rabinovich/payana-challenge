@@ -26,7 +26,7 @@ React 19 + Vite + TypeScript. No Next.js: there is nothing to render server-side
 
 **Only backend dependency: `@aa/contracts`.** It cannot import `@aa/core` or `@aa/adapters`; `dependency-cruiser` forbids it (ADR-0010).
 
-This bit is easy to erode in a test rather than in the app. The phrase-coverage test needs the list of evidence codes, and importing it from `@aa/core` would have been one convenient line — so instead it reads `docs/EVIDENCE-CODES.md`, the same published vocabulary the API serves at `GET /evidence-codes`.
+This bit is easy to erode in a test rather than in the app. The phrase-coverage test needs the list of evidence codes, and importing it from `@aa/core` would have been one convenient line — so instead it takes `EVIDENCE_CODES` from `@aa/contracts`, the same published vocabulary the API serves at `GET /evidence-codes`.
 
 **UI copy is `es-AR`, formal register**, with Argentine number formatting (`$19.715.313,89`).
 

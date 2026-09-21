@@ -28,7 +28,7 @@ Answer the operational question: **did the money Wompi promised actually reach t
 | `SettlementBatch` | type plus pure functions | `batchDate`, `chargeIds`, `gross`, `deductions[]`, `expectedNet` |
 | `Deduction` | type | `{ kind: FEE\|TAX\|WITHHOLDING, amount, basis: EXPLICIT\|IMPLIED }` |
 | `Evidence` | type | `{ code, dimension, passed, weight, expected?, observed?, detail? }` |
-| `EvidenceCode` | literal union | Closed vocabulary. See [EVIDENCE-CODES.md](../EVIDENCE-CODES.md) |
+| `EvidenceCode` | literal union | Closed vocabulary, served at `GET /evidence-codes` |
 | `Confidence` | type | `{ score, band, components: Evidence[] }` |
 | `MatchResult` | type | See §4.6 |
 | `Lineage` | type | `Trace` output: payment → batch → transfer → deposit |
@@ -168,7 +168,7 @@ Every bank credit that ended up unassigned appears in a separate list with its c
 - [ ] No threshold is hardcoded: changing a tolerance means editing JSON.
 - [ ] F02-T17 passes: the system is reproducible.
 - [ ] `Trace` over any `CHARGE` returns the full chain with IDs resolvable down to the `RawRecord`.
-- [ ] Every evidence code used is documented in `EVIDENCE-CODES.md`.
+- [ ] Every evidence code the domain emits is published in `@aa/contracts` (a test compares them).
 
 ## 9. How it is demonstrated
 

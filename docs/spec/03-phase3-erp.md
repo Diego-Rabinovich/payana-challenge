@@ -122,7 +122,7 @@ To report *"this entry is missing its fee, VAT and withholding lines"*, the syst
 It balances by the identity `gross = net + fee + VAT + withholding` — the same one Phase 2 validates.
 
 **Required:** the reconciliation prints this in `report.md` and emits it structured in `report.json`.
-**Bonus:** `PostMissingEntries` sends it to Odoo, dry-run by default, `--confirm` to execute, `ref = mov:<movementId>` as idempotency key, entries created as **draft**. Existing entries are never modified or deleted. See ADR-0006.
+**Bonus:** `PostMissingEntries` sends it to Odoo, off unless `ODOO_WRITE_ENABLED`, one entry per button press in the console, `ref = mov:<movementId>` as idempotency key, entries created as **draft**. Existing entries are never modified: what they lack is shown read-only. See ADR-0006.
 
 ## 8. Settled decisions
 
@@ -144,7 +144,7 @@ It balances by the identity `gross = net + fee + VAT + withholding` — the same
 | `ODOO_COMPANY_ID` | `2`, goes in the context |
 | `ODOO_JOURNAL_WOMPI` | `48` |
 | `ODOO_JOURNAL_BANCOLOMBIA` | `49` |
-| `ODOO_WRITE_ENABLED` | `false`. Reads unrestricted; creating entries needs this plus `--confirm` |
+| `ODOO_WRITE_ENABLED` | `false`. Reads unrestricted; creating entries needs this, and only drafts in journals 48/49 |
 
 The canonical-type → account-code map lives in `config/odoo-accounts.json`, not in env and not in code.
 

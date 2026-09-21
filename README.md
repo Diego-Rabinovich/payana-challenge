@@ -33,14 +33,9 @@ make up                  # db + api + web
 | API docs | <http://localhost:3100/docs> |
 | Postgres | `localhost:5433` |
 
-Ports are off the defaults on purpose — 5432, 3000 and 5173 are usually taken.
-To change one, edit `infra/docker-compose.yml`.
-
-Wompi and Odoo are read live, so `.env` needs their credentials. The bank
-statements are real documents and are not in the repository: upload them from
-the console (**Nueva corrida**) before a run, or drop the PDFs in
-`data/statements/`. Without them the bank side is empty and every settlement
-comes out unmatched, which is the correct answer to having no statement.
+The bank statements are not in the repository: upload them from the console
+(**Nueva corrida**) or drop the PDFs in `data/statements/`. Without them every
+settlement comes out unmatched, which is the correct answer.
 
 ### The batch pipeline
 
@@ -51,10 +46,36 @@ make report                        # rewrite the artifacts from the last run
 make down                          # stop everything
 ```
 
-`make demo` prints a summary and writes `data/out/report.md` for a person and
-`data/out/report.json` for a machine.
+## Reading the output
 
-### For an AI client
+`data/out/report.md` is for the CFO; the console downloads the same file.
+
+- **Wompi → Bancolombia**: the funnel (gross − deductions = expected vs
+  credited) and how many settlements are `CONFIRMED` / `PROBABLE` /
+  `UNMATCHED`. The deductions are derived: gross − credited.
+- **Contra el ERP**: per journal, entries that match, that are incomplete
+  (lack the deduction lines) and that are missing.
+- **Excepciones**: every settlement that is not `CONFIRMED`, with each evidence
+  code as ✓/✗ and what was expected against what was observed.
+
+`data/out/report.json` has everything, line by line: the API's DTOs for both
+phases plus the rubric that gives each code its weight. The console shows the
+same with the corrections each ERP line needs.
+
+## How it is organized
+
+```
+packages/core       domain, rules, use cases, ports — no I/O
+packages/adapters   Wompi, PDF parser, Odoo, Postgres; composition.ts wires it
+packages/contracts  the Zod DTOs the API, web and MCP share
+apps/api · web · cli · mcp   thin shells over the same use cases
+config/             ruleset, chart of accounts, holidays, bank descriptors
+docs/adr/           why each decision was made
+```
+
+Boundaries are enforced by `dependency-cruiser`, not by convention.
+
+## For an AI client
 
 The MCP server exposes the results as read-only tools over stdio. Configuration
 and a worked session are in [docs/MCP.md](docs/MCP.md).
@@ -63,7 +84,7 @@ and a worked session are in [docs/MCP.md](docs/MCP.md).
 docker compose -f infra/docker-compose.yml --profile tools run --rm -T mcp
 ```
 
-### Working on it
+## Working on it
 
 The test suite and the type checker run on the host and need pnpm:
 

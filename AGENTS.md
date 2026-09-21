@@ -99,10 +99,10 @@ These are production credentials against a live business.
 
 - **Never change Wompi's events URL** or rotate a key.
 - **Never create a transaction** in Wompi, test or otherwise.
-- **Writing to Odoo stays off.** `ODOO_WRITE_ENABLED=false` is the default and
-  the CLI additionally requires `--confirm`. Existing entries are never
-  modified or deleted; a discrepancy is reported and correcting it is a human
-  decision.
+- **Writing to Odoo stays off.** `ODOO_WRITE_ENABLED=false` is the default.
+  When on, only drafts, only in the two sandbox journals (48 and 49), only on
+  accounts the AccountMap names. A discrepancy in an existing entry is shown,
+  never written.
 - **No credentials or unscrubbed personal data in the repository.** Raw
   payloads go to `data/raw/`, which is ignored.
 - **The MCP server has no write tools and never will.** Creating entries in a

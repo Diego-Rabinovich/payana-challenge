@@ -108,7 +108,7 @@ This is what makes the whole ports-and-adapters strategy safe. For each port we 
 
 ## 6. Environment variables
 
-Those in `.env.example`, grouped into application, persistence, Wompi, Odoo and frontend. Detail in [ENVIRONMENT.md](../ENVIRONMENT.md).
+Those in `.env.example`, grouped into application, persistence, Wompi, Odoo and frontend.
 
 `SOURCE_MODE` is the most important variable in the project: in `fixtures` the system runs end to end with no credentials and no network.
 

@@ -149,7 +149,7 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
     }),
     // The gateway needs the chart to turn a correction into an entry.
     accountMap,
-    // Reads are unrestricted; writing needs the flag and an explicit confirm.
+    // Reads are unrestricted; writing needs the flag.
     { writeEnabled: config.odoo.writeEnabled },
   );
 

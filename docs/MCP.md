@@ -15,7 +15,7 @@ for a year of a chain it is not going to fit, and if it did the model would be
 reasoning over noise to answer a question about one settlement.
 
 MCP turns that into a conversation. The agent asks for the summary, sees that
-24 settlements are ambiguous, pulls one, and asks why. It reads a few kilobytes
+3 settlements did not match, pulls one, and asks why. It reads a few kilobytes
 instead of a megabyte, and each answer is the same object the API would have
 returned.
 
@@ -30,7 +30,7 @@ a CFO cannot take a number that changes between runs to an audit.
 
 **There are no write tools.** `create_entry` is not exposed and will not be.
 Creating entries in a production ERP does not belong one prompt away; that
-stays in the CLI behind `--confirm`, where a person typed it. A test asserts no
+stays in the console, behind a button a person pressed. A test asserts no
 tool name matches `create|post|update|delete|write|approve`.
 
 ## Tools
@@ -99,62 +99,51 @@ get_run_summary()
 ```
 ```json
 {
-  "runId": "run_20260919205402",
-  "rulesetVersion": "v1",
-  "batches": 65,
-  "byStatus": { "PROBABLE": 31, "AMBIGUOUS": 24, "UNMATCHED": 10 },
-  "expectedNet":  { "cents": 25520882800, "formatted": "$255.208.828,00" },
-  "observedNet":  { "cents": 24388914211, "formatted": "$243.889.142,11" },
-  "unexplained":  { "cents": 1131968589,  "formatted": "$11.319.685,89" },
-  "unattributedCredits": 150
+  "runId": "run_20260921161140",
+  "batches": 56,
+  "byStatus": { "CONFIRMED": 39, "PROBABLE": 14, "UNMATCHED": 3 },
+  "deductions":  { "formatted": "$9.736.628,84" },
+  "expectedNet": { "formatted": "$245.472.199,16" },
+  "observedNet": { "formatted": "$215.739.967,16" },
+  "unexplained": { "formatted": "$29.732.232,00" }
 }
 ```
 
-Eleven million pesos unaccounted for, and 24 settlements the system refused to
-decide. The agent now has somewhere to start rather than a file to read.
+Fifty-three settlements close and three do not. The agent now has somewhere to
+start rather than a file to read.
 
-**2. Show me one of the ambiguous ones.**
-
-```
-list_exceptions(status: "ambiguous", limit: 1)
-→ 24 total, first is mat_6b6f90a5ce23b12b
-```
-
-**3. Why can you not decide this one?**
+**2. Show me the ones that did not match.**
 
 ```
-explain_match(matchId: "mat_6b6f90a5ce23b12b")
+list_exceptions(status: "unmatched", limit: 1)
+→ 3 total, first is mat_34ad35deca5ea21d
 ```
 
+**3. Why not this one?**
+
 ```
-batch 2026-01-03   window 2026-01-05 → 2026-01-07
-gross      $195.700,00
-expected   $195.700,00
-observed   $4.820.714,76
-
-score 48  (65 of 135 attainable)
-
-  AMOUNT_MISMATCH          ✗   delta COP 462501476
-  DATE_T1_EXACT            ✓
-  DESCRIPTOR_MATCH         ✓
-  IDENTITY_BROKEN          ✗   source reported no deductions to verify
-  SETTLEMENT_SINGLE_CREDIT ✓
-  COMPETING_CANDIDATE      ✗   runner-up scored 41
-
-  discarded: mov_38cdcd5722b9c6a9  41  AMOUNT_MISMATCH
-             mov_4938a79f88768e19  37  AMOUNT_MISMATCH
-             mov_f86d913b5025218f  30  AMOUNT_MISMATCH
+explain_match(matchId: "mat_34ad35deca5ea21d")
+```
+```json
+{
+  "band": "UNMATCHED",
+  "disqualifiedBy": "AMOUNT_MISMATCH",
+  "components": [{
+    "code": "SETTLEMENT_MERGED",
+    "expected": "una acreditación propia de $25.936.896,00",
+    "observed": "2026-02-24 $28.145.645,23",
+    "detail": "parece haberse cobrado junto con el corte del 2026-02-23: los dos suman $29.414.683,00 y el crédito está 4,31% por debajo, dentro de lo que el canal puede cobrar"
+  }]
+}
 ```
 
 Everything the agent needs to write the finding is there, and none of it is
-prose it has to trust. A Saturday batch of $195.700 against a Monday credit of
-$4.820.714 — the date and the counterparty line up, the amount is nowhere near,
-and three other credits scored almost as well. The honest answer is that this
-batch cannot be matched from a statement alone, and the system says so instead
-of picking the closest number.
+prose it has to trust: the batch has no credit of its own, and the one credit
+that fits is two batches paid together. The system says so instead of forcing
+a match, and the detail is assembled from the amounts, not written by a model.
 
-An agent that cites `COMPETING_CANDIDATE` and `AMOUNT_MISMATCH` here is saying
-something checkable. That is the whole point of the closed vocabulary.
+An agent that cites `SETTLEMENT_MERGED` here is saying something checkable.
+That is the whole point of the closed vocabulary.
 
 ## What is deliberately not here
 
