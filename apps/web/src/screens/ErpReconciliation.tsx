@@ -19,6 +19,13 @@ const ESTADOS = [
   'DUPLICATE_IN_ERP',
 ];
 
+/**
+ * El valor del filtro para un estado. `MATCHED` no es una discrepancia: su
+ * filtro es «Solo lo que coincide». Sin esto, la cajita de conciliados dejaba
+ * `status=MATCHED` en la URL, ningún filtro lo reconocía y se veía todo.
+ */
+const filtroDe = (status: string) => (status === 'MATCHED' ? 'matched' : status);
+
 const ESTADO_LABEL: Record<string, string> = {
   AMOUNT_MISMATCH: 'Monto distinto',
   INCOMPLETE_ENTRY: 'Asiento incompleto',
@@ -87,7 +94,7 @@ export function ErpReconciliation() {
         // El default es 'all', y el select lo refleja. Antes mostraba
         // "Solo discrepancias" mientras el filtro dejaba pasar todo, porque
         // sin valor ninguna de las dos condiciones recortaba nada.
-        const mostrar = filter.status ?? 'all';
+        const mostrar = filtroDe(filter.status ?? 'all');
         // Quién mandó la plata. Con 415 líneas en el diario del banco,
         // poder quedarse sólo con Wompi es la diferencia entre revisarlo
         // y no abrirlo.
@@ -139,11 +146,11 @@ export function ErpReconciliation() {
                   type="button"
                   className="tile"
                   key={status}
-                  onClick={() => update({ status: mostrar === status ? 'all' : status })}
+                  onClick={() => update({ status: mostrar === filtroDe(status) ? 'all' : filtroDe(status) })}
                   style={{
                     textAlign: 'left',
                     cursor: 'pointer',
-                    outline: mostrar === status ? '2px solid var(--ink)' : 'none',
+                    outline: mostrar === filtroDe(status) ? '2px solid var(--ink)' : 'none',
                   }}
                 >
                   <div className="tile__label">
