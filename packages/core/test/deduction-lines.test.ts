@@ -50,7 +50,11 @@ const charge = (sale: typeof A) =>
     },
   });
 
-async function reconcile(withSettlements: boolean, entryGross = A.gross) {
+async function reconcile(
+  withSettlements: boolean,
+  entryGross = A.gross,
+  complete = false,
+) {
   const [a, b] = [charge(A), charge(B)];
   const movements = new InMemoryMovementRepository();
   await movements.upsertMany([a, b]);
@@ -61,7 +65,16 @@ async function reconcile(withSettlements: boolean, entryGross = A.gross) {
     name: 'WMP/2026/00001',
     date: '2026-04-24',
     ref: A.ref,
-    lines: [erpLine('1110001', entryGross, 0, 'Wompi'), erpLine('420500', 0, entryGross, 'Otras Ventas')],
+    lines: complete
+      ? [
+          // Las cinco líneas: neto a Wompi, las tres deducciones, y el bruto a ventas.
+          erpLine('1110001', entryGross - 1_000_000, 0, 'Wompi'),
+          erpLine('530505', 600_000, 0, 'Comisión'),
+          erpLine('240810', 114_000, 0, 'IVA'),
+          erpLine('236500', 286_000, 0, 'Retención'),
+          erpLine('420500', 0, entryGross, 'Otras Ventas'),
+        ]
+      : [erpLine('1110001', entryGross, 0, 'Wompi'), erpLine('420500', 0, entryGross, 'Otras Ventas')],
   });
 
   // Lo que la fase 2 dejó para la liquidación: sólo lo que esta fase lee.
@@ -162,6 +175,16 @@ describe('las deducciones que le faltan a cada venta de Wompi', () => {
     expect(a.status).toBe('INCOMPLETE_ENTRY');
     expect(a.evidence.map((item) => item.code)).toContain('AMOUNT_MISMATCH_ERP');
     expect(conceptsOf(a.correction!)).toEqual(['FEE', 'TAX', 'WITHHOLDING']);
+  });
+
+  it('el asiento completo, el que crea el botón, concilia', async () => {
+    // Lo medía por su primera línea —el neto— y salía «monto distinto» por
+    // exactamente lo retenido. La venta es la suma de las cuatro.
+    const { a } = await reconcile(true, A.gross, true);
+
+    expect(a.status).toBe('MATCHED');
+    expect(a.delta?.cents ?? 0).toBe(0);
+    expect(a.correction).toBeUndefined();
   });
 
   it('sin resultados de la fase 2 no inventa nada: el asiento queda conciliado', async () => {

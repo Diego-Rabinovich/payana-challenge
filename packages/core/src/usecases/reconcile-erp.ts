@@ -97,8 +97,12 @@ export class ReconcileErp {
 
     const ledgerMovements = await this.movements.findByAccount(input.accountId, input.range);
     const entries = await this.erp.readJournal(journal.id, input.range);
-
-    const index = new ErpEntryIndex(entries, journal.mainAccount);
+    const addBack = input.settlements
+      ? DEDUCTIONS.map((type) => this.accountMap.accountFor(type)?.code).filter(
+          (code): code is string => code !== undefined,
+        )
+      : [];
+    const index = new ErpEntryIndex(entries, journal.mainAccount, addBack);
     const context: ErpMatchContext = {
       index,
       accountMap: this.accountMap,

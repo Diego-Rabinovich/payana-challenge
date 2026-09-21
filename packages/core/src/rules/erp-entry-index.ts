@@ -16,6 +16,7 @@ export class ErpEntryIndex {
   constructor(
     private readonly entries: readonly ErpEntry[],
     private readonly mainAccount: string,
+    private readonly addBack: readonly string[] = [],
   ) {
     for (const entry of entries) {
       const reference = externalReferenceOf(entry);
@@ -46,9 +47,15 @@ export class ErpEntryIndex {
     return dates.flatMap((date) => this.findByDateAndAmount(date, cents));
   }
 
-  /** Signed effect on the journal's own account, which is what we compare. */
+  /** Signed effect on the journal's own account, plus what was retained, which is what we compare. */
   amountOf(entry: ErpEntry): number | undefined {
-    return netOnAccount(entry, this.mainAccount)?.cents;
+    const main = netOnAccount(entry, this.mainAccount)?.cents;
+    if (main === undefined) return undefined;
+
+    return this.addBack.reduce(
+      (total, code) => total + (netOnAccount(entry, code)?.cents ?? 0),
+      main,
+    );
   }
 
   claim(entry: ErpEntry): void {
