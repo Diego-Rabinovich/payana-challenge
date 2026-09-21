@@ -13,6 +13,7 @@ export * from './presentation/channel-calibration.js';
 export * from './presentation/markdown-report.js';
 export * from './presentation/money.presenter.js';
 export * from './presentation/reconciliation.presenter.js';
+export * from './presentation/run-report.presenter.js';
 export * from './shared/decimal-text.js';
 export * from './wompi/transactions-source.js';
 export * from './wompi/wompi-client.js';

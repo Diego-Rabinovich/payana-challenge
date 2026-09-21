@@ -19,6 +19,7 @@ import {
 import { reviveErpReport, reviveFlowReport } from './persistence/revive.js';
 import { describeChannel } from './presentation/channel-calibration.js';
 import { renderMarkdown } from './presentation/markdown-report.js';
+import { toRunReportDto } from './presentation/run-report.presenter.js';
 import { listStatements, saveStatement } from './fs/statement-inbox.js';
 import type { Dependencies } from './composition.js';
 
@@ -242,13 +243,32 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       reportArtifact: async (runId, format) => {
         const stored = await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi');
         if (!stored) return undefined;
+        const flow = reviveFlowReport(stored);
 
-        // JSON goes out as stored; Markdown is rendered from the revived
-        // report by the same function the CLI writes to disk, so the download
-        // and the file cannot drift apart.
-        if (format === 'json') return JSON.stringify(stored, null, 2);
-        if (format === 'md') return renderMarkdown(reviveFlowReport(stored));
-        return undefined;
+        // Las dos salen de acá: la CLI escribe a disco lo mismo que descarga la
+        // consola, así que el archivo y la descarga no pueden divergir.
+        if (format === 'md') return renderMarkdown(flow);
+
+        // El JSON antes era el objeto interno tal como se guardó: montos como
+        // centavos crudos, explicaciones con `COP 2941468300`, y sólo la fase 2.
+        // Ahora son los DTOs de la API, con las dos fases y la rúbrica.
+        const run = await repositories.runs.findById(asRunId(runId));
+        if (!run) return undefined;
+
+        const erp: Record<string, ErpReconciliationReport> = {};
+        for (const journal of ['wompi', 'bancolombia']) {
+          const saved = await repositories.reports.load<unknown>(asRunId(runId), 'erp', journal);
+          if (saved) erp[journal] = reviveErpReport(saved);
+        }
+
+        const report = toRunReportDto({
+          run: toRunRecord(run),
+          flow,
+          erp,
+          ruleSet,
+          accountMap,
+        });
+        return JSON.stringify(report, null, 2);
       },
     },
   };

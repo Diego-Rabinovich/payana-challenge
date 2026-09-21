@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { renderMarkdown } from '@aa/adapters';
 import { LATEST_RUN, type ReadModel } from '@aa/core';
 
 /**
@@ -20,8 +19,13 @@ export async function writeReport(
   const resolved = await readModel.runs.resolve(runId);
   if (!resolved) return [];
 
-  const report = await readModel.flow.flowReport(resolved);
-  if (!report) return [];
+  // Por el mismo camino que la descarga de la consola: el archivo en disco y el
+  // que se baja por la API no pueden ser dos cosas distintas.
+  const [markdownText, jsonText] = await Promise.all([
+    readModel.runs.reportArtifact(resolved, 'md'),
+    readModel.runs.reportArtifact(resolved, 'json'),
+  ]);
+  if (!markdownText || !jsonText) return [];
 
   await mkdir(outDir, { recursive: true });
 
@@ -29,10 +33,10 @@ export async function writeReport(
   const markdown = join(outDir, 'report.md');
   const json = join(outDir, 'report.json');
 
-  await writeFile(markdown, renderMarkdown(report), 'utf8');
+  await writeFile(markdown, markdownText, 'utf8');
   files.push(markdown);
 
-  await writeFile(json, JSON.stringify(report, null, 2), 'utf8');
+  await writeFile(json, jsonText, 'utf8');
   files.push(json);
 
   return files;

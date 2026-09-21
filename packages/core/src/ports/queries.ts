@@ -111,7 +111,11 @@ export interface RunQueries {
   resolve(runId: string): Promise<string | undefined>;
   /** Triggers a run. Returns the created record; the route decides the status code. */
   start(input: { from: string; to: string; sources?: readonly string[] }): Promise<RunRecord>;
-  reportArtifact(runId: string, format: 'md' | 'json' | 'ndjson'): Promise<string | undefined>;
+  /**
+   * El artefacto de una corrida: Markdown para una persona, JSON para una IA.
+   * El JSON son los DTOs de la API; ver `RunReportDto`.
+   */
+  reportArtifact(runId: string, format: 'md' | 'json'): Promise<string | undefined>;
 }
 
 export interface RunRecord {

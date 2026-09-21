@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { EvidenceCodeDto } from './evidence-codes.js';
 import { EvidenceDimensionDto, IsoDate, IsoInstant, MoneyDto } from './primitives.js';
-import { ReconciliationSummaryDto } from './reconciliation.js';
+import {
+  ErpReconciliationDto,
+  ReconciliationDto,
+  ReconciliationSummaryDto,
+  UnattributedCreditDto,
+} from './reconciliation.js';
 
 /**
  * A run is immutable: runs are not overwritten, they are compared. That is
@@ -155,3 +160,24 @@ export const ChannelDto = z.object({
 
 export type ChannelDto = z.infer<typeof ChannelDto>;
 export type RateCalibrationDto = z.infer<typeof RateCalibrationDto>;
+
+/**
+ * Everything one run concluded, in one file — the structured output for a model.
+ *
+ * The same DTOs the API and the MCP tools return, so there is no second schema
+ * to learn and nothing to keep in step. It carries both phases and the rubric,
+ * which is what makes it self-describing: a model can read what was concluded,
+ * with what evidence, and what each cited code is worth, without asking for
+ * anything else.
+ */
+export const RunReportDto = z.object({
+  schema: z.literal('conciliacion-alcazar/run-report@1'),
+  run: RunDto,
+  summary: ReconciliationSummaryDto,
+  reconciliations: z.array(ReconciliationDto),
+  unattributedCredits: z.array(UnattributedCreditDto),
+  erp: z.record(z.string(), ErpReconciliationDto).describe('Phase 3, keyed by journal'),
+  rubric: RubricDto,
+});
+
+export type RunReportDto = z.infer<typeof RunReportDto>;
