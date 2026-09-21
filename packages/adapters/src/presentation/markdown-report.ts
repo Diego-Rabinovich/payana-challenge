@@ -1,5 +1,12 @@
 import { formatMoney, humaniseAmounts } from './money-format.js';
-import type { Evidence, MatchResult, ReconciliationReport } from '@aa/core';
+import {
+  type ErpReconciliationReport,
+  type Evidence,
+  type MatchResult,
+  Money,
+  type ReconciliationReport,
+  amountOfConcept,
+} from '@aa/core';
 
 /**
  * The run, written for a person.
@@ -12,7 +19,11 @@ import type { Evidence, MatchResult, ReconciliationReport } from '@aa/core';
  * Nothing here invents prose: every sentence is assembled from the evidence
  * codes the engine emitted.
  */
-export function renderMarkdown(report: ReconciliationReport): string {
+export function renderMarkdown(
+  report: ReconciliationReport,
+  /** La fase 3, por diario. Sin ella el reporte sólo cuenta la mitad. */
+  erp: Readonly<Record<string, ErpReconciliationReport>> = {},
+): string {
   const { totals } = report;
   const exceptions = report.matches
     .filter((match) => match.status !== 'CONFIRMED')
@@ -23,7 +34,7 @@ export function renderMarkdown(report: ReconciliationReport): string {
     '',
     `Ruleset \`${report.rulesetVersion}\`${report.runId ? ` · corrida \`${report.runId}\`` : ''}`,
     '',
-    '## Dónde está la plata',
+    '## Wompi → Bancolombia',
     '',
     '| | |',
     '|---|---:|',
@@ -36,6 +47,7 @@ export function renderMarkdown(report: ReconciliationReport): string {
     '',
     ...Object.entries(totals.byStatus).map(([status, count]) => `- ${status}: ${count}`),
     '',
+    ...renderErp(report, erp),
     `## Excepciones (${exceptions.length})`,
     '',
     ...(exceptions.length === 0
@@ -58,8 +70,8 @@ export function renderMarkdown(report: ReconciliationReport): string {
     '---',
     '',
     `Generado el ${new Date().toISOString()}. Cada conclusión cita los movimientos que relaciona,`,
-    'la regla que usó y la evidencia que la sostiene. Los códigos de evidencia están',
-    'documentados en `docs/EVIDENCE-CODES.md`.',
+    'la regla que usó y la evidencia que la sostiene. Qué significa y cuánto vale cada código',
+    'está en la rúbrica de `report.json` y en el glosario de la consola.',
     '',
   ].join('\n');
 }
@@ -100,4 +112,86 @@ function renderEvidence(evidence: Evidence): string {
 
 function amountAtRisk(match: MatchResult): number {
   return Math.abs(match.amounts.delta?.cents ?? match.amounts.expectedNet.cents);
+}
+
+/**
+ * La fase 3, para un CFO: cuánto coincide, qué falta y qué está mal registrado.
+ *
+ * Corto a propósito. El detalle línea por línea está en la consola y en
+ * `report.json`; acá va lo que alguien tiene que saber para decidir.
+ */
+function renderErp(
+  report: ReconciliationReport,
+  erp: Readonly<Record<string, ErpReconciliationReport>>,
+): string[] {
+  const journals = Object.values(erp);
+  if (journals.length === 0) return [];
+
+  const count = (journal: ErpReconciliationReport, ...statuses: string[]) =>
+    statuses.reduce(
+      (total, status) =>
+        total + (journal.totals.byStatus[status as keyof typeof journal.totals.byStatus] ?? 0),
+      0,
+    );
+
+  const rows = journals.map(
+    (journal) =>
+      `| ${journal.journalName} | ${count(journal, 'MATCHED')} | ${count(journal, 'INCOMPLETE_ENTRY')} | ` +
+      `${count(journal, 'MISSING_IN_ERP')} | ${count(journal, 'MISSING_IN_LEDGER')} | ` +
+      `${count(journal, 'AMOUNT_MISMATCH', 'DATE_SHIFT', 'DUPLICATE_IN_ERP')} |`,
+  );
+
+  // Lo que les falta a los asientos de venta que existen: las tres deducciones.
+  const incomplete = journals.flatMap((journal) =>
+    journal.lines.filter((line) => line.status === 'INCOMPLETE_ENTRY' && line.correction),
+  );
+  const lacking = Money.sum(
+    incomplete.flatMap((line) =>
+      (['FEE', 'TAX', 'WITHHOLDING'] as const).map((concept) =>
+        amountOfConcept(line.correction!, concept),
+      ),
+    ),
+  );
+
+  // Faltantes que sí son de Wompi —tienen asiento propuesto— y los que no.
+  const missing = journals.map((journal) => {
+    const lines = journal.lines.filter((line) => line.status === 'MISSING_IN_ERP');
+    const inScope = lines.filter((line) => line.correction);
+    return {
+      name: journal.journalName,
+      count: inScope.length,
+      amount: Money.sum(inScope.map((line) => (line.ledgerAmount ?? Money.zero()).abs())),
+      outOfScope: lines.length - inScope.length,
+    };
+  });
+  const outOfScope = missing.reduce((total, journal) => total + journal.outOfScope, 0);
+
+  return [
+    '## Contra el ERP (Odoo)',
+    '',
+    '| Diario | Conciliadas | Incompletas | Faltan en el ERP | Faltan en el ledger | Otras diferencias |',
+    '|---|---:|---:|---:|---:|---:|',
+    ...rows,
+    '',
+    `**Wompi retuvo ${formatMoney(report.totals.deductions)} en el período** —comisión, IVA y ` +
+      `retención${report.totals.deductionsAreDerived ? ', derivados de la diferencia entre lo vendido y lo acreditado' : ''}— ` +
+      '**y el ERP no registró esas partidas.** Las ventas están asentadas al bruto y ningún asiento ' +
+      'toca las cuentas de comisión, IVA ni retención.' +
+      (incomplete.length > 0
+        ? ` Por eso los ${incomplete.length} asientos de venta que existen quedan incompletos: ` +
+          `les faltan ${formatMoney(lacking)}.`
+        : ''),
+    '',
+    'Asientos de Wompi que faltan: ' +
+      missing
+        .filter((journal) => journal.count > 0)
+        .map((journal) => `${journal.count} en ${journal.name} (${formatMoney(journal.amount)})`)
+        .join(' y ') +
+      '.' +
+      (outOfScope > 0
+        ? ` Los otros ${outOfScope} movimientos sin asiento —comisiones e intereses del banco, ` +
+          'pagos a terceros— están fuera del alcance y no se propone corregirlos.'
+        : ''),
+    '',
+  ];
 }

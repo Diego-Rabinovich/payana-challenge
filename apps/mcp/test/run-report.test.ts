@@ -91,6 +91,17 @@ describe('the structured run report', () => {
 });
 
 describe('the report for the CFO', () => {
+  it('cuenta las dos fases, no sólo la del banco', async () => {
+    // Cubría sólo la fase 2: el ERP no aparecía en ninguna línea, y la pregunta
+    // del enunciado termina en «qué está mal registrado en el ERP».
+    const flow = (await model.flow.flowReport('run_test'))!;
+    const erp = (await model.erp.erpReconciliation({ journalKey: 'wompi', runId: 'run_test' }))!;
+    const markdown = renderMarkdown(flow, { wompi: erp });
+
+    expect(markdown).toContain('## Contra el ERP (Odoo)');
+    expect(markdown).toContain(erp.journalName);
+  });
+
   it('shows amounts a person can read, not cents', async () => {
     // Imprimía 46 líneas con «COP 2593689600»: centavos, que leídos como pesos
     // son cien veces el monto real. Es el reporte que se lleva a una reunión.

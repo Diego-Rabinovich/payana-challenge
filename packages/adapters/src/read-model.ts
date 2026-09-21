@@ -248,21 +248,20 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         if (!stored) return undefined;
         const flow = reviveFlowReport(stored);
 
-        // Las dos salen de acá: la CLI escribe a disco lo mismo que descarga la
-        // consola, así que el archivo y la descarga no pueden divergir.
-        if (format === 'md') return renderMarkdown(flow);
-
-        // El JSON antes era el objeto interno tal como se guardó: montos como
-        // centavos crudos, explicaciones con `COP 2941468300`, y sólo la fase 2.
-        // Ahora son los DTOs de la API, con las dos fases y la rúbrica.
-        const run = await repositories.runs.findById(asRunId(runId));
-        if (!run) return undefined;
-
         const erp: Record<string, ErpReconciliationReport> = {};
         for (const journal of ['wompi', 'bancolombia']) {
           const saved = await repositories.reports.load<unknown>(asRunId(runId), 'erp', journal);
           if (saved) erp[journal] = reviveErpReport(saved);
         }
+
+        // Las dos salen de acá: la CLI escribe a disco lo mismo que descarga la
+        // consola, así que el archivo y la descarga no pueden divergir. Y las
+        // dos traen las dos fases.
+        if (format === 'md') return renderMarkdown(flow, erp);
+
+        // El JSON son los DTOs de la API, con las dos fases y la rúbrica.
+        const run = await repositories.runs.findById(asRunId(runId));
+        if (!run) return undefined;
 
         const report = toRunReportDto({
           run: toRunRecord(run),
