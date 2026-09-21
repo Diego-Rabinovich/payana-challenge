@@ -1,4 +1,4 @@
-import type { Money } from '@aa/core';
+import { Money } from '@aa/core';
 
 /**
  * Showing amounts to a person.
@@ -30,4 +30,23 @@ function conventions(locale: MoneyLocale) {
     case 'es-AR':
       return { symbol: '$', thousands: '.', decimal: ',' };
   }
+}
+
+/**
+ * Formats every amount written inside a sentence.
+ *
+ * Evidence text is composed in the domain, which only knows integers, so it
+ * carries amounts as `COP 2941468300` — cents. That is right for storage and
+ * wrong for any reader: read as pesos it is a hundred times too large. Every
+ * presenter that shows evidence text to someone goes through here. The API did
+ * and the Markdown report for the CFO did not, and printed forty-six of them.
+ */
+export function humaniseAmounts(text: string): string {
+  // Cinturón: un campo de evidencia debería ser siempre una cadena, y cuando
+  // dejó de serlo se llevó puesta la pantalla entera en vez de una línea.
+  if (typeof text !== 'string') return String(text);
+
+  return text.replace(/COP\s(-?\d+)/g, (_match, cents: string) =>
+    formatMoney(Money.ofCents(Number(cents))),
+  );
 }

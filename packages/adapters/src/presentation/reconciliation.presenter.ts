@@ -19,7 +19,7 @@ import type {
   UnattributedCredit,
 } from '@aa/core';
 import { isMappable, toJournalEntry } from '../odoo/journal-entry-builder.js';
-import { formatMoney } from './money-format.js';
+import { formatMoney, humaniseAmounts } from './money-format.js';
 import { toMoneyDto, toOptionalMoneyDto } from './money.presenter.js';
 
 export function toEvidenceDto(evidence: Evidence): EvidenceDto {
@@ -29,31 +29,13 @@ export function toEvidenceDto(evidence: Evidence): EvidenceDto {
     passed: evidence.passed,
     ...(evidence.applicable !== undefined ? { applicable: evidence.applicable } : {}),
     ...(evidence.weight !== undefined ? { weight: evidence.weight } : {}),
-    ...(evidence.expected !== undefined ? { expected: humanise(evidence.expected) } : {}),
-    ...(evidence.observed !== undefined ? { observed: humanise(evidence.observed) } : {}),
-    ...(evidence.detail !== undefined ? { detail: humanise(evidence.detail) } : {}),
+    ...(evidence.expected !== undefined ? { expected: humaniseAmounts(evidence.expected) } : {}),
+    ...(evidence.observed !== undefined ? { observed: humaniseAmounts(evidence.observed) } : {}),
+    ...(evidence.detail !== undefined ? { detail: humaniseAmounts(evidence.detail) } : {}),
     ...(evidence.locator !== undefined ? { locator: evidence.locator } : {}),
   };
 }
 
-/**
- * Rewrites the raw amounts inside an evidence string.
- *
- * The domain builds these with `Money.toString()`, whose canonical form is
- * `COP 1290574000` — cents, no separators. On screen that reads as twelve
- * thousand million pesos instead of twelve million, which is not a cosmetic
- * problem. Formatting belongs at the edge, so it happens here rather than by
- * teaching the value object about locales. See ADR-0008.
- */
-function humanise(text: string): string {
-  // Cinturón: un campo de evidencia debería ser siempre una cadena, y cuando
-  // dejó de serlo se llevó puesta la pantalla entera en vez de una línea.
-  if (typeof text !== 'string') return String(text);
-
-  return text.replace(/COP\s(-?\d+)/g, (_match, cents: string) =>
-    formatMoney(Money.ofCents(Number(cents))),
-  );
-}
 
 export function toReconciliationDto(match: MatchResult): ReconciliationDto {
   return {

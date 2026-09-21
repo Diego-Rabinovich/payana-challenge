@@ -1,4 +1,4 @@
-import { formatMoney } from './money-format.js';
+import { formatMoney, humaniseAmounts } from './money-format.js';
 import type { Evidence, MatchResult, ReconciliationReport } from '@aa/core';
 
 /**
@@ -93,9 +93,9 @@ function renderEvidence(evidence: Evidence): string {
   const mark = evidence.passed ? '✓' : '✗';
   const values =
     evidence.expected || evidence.observed
-      ? ` — esperado ${evidence.expected ?? '—'}, observado ${evidence.observed ?? '—'}`
+      ? ` — esperado ${humaniseAmounts(evidence.expected ?? '—')}, observado ${humaniseAmounts(evidence.observed ?? '—')}`
       : '';
-  return `- ${mark} \`${evidence.code}\`${values}${evidence.detail ? ` (${evidence.detail})` : ''}`;
+  return `- ${mark} \`${evidence.code}\`${values}${evidence.detail ? ` (${humaniseAmounts(evidence.detail)})` : ''}`;
 }
 
 function amountAtRisk(match: MatchResult): number {
