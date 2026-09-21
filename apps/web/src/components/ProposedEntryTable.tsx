@@ -136,13 +136,7 @@ export function ProposedEntryTable({
         </table>
       </div>
 
-      {readOnly ? (
-        <p className="faint" style={{ marginTop: 10 }}>
-          Las líneas que le faltan a este asiento, sólo para mostrar: no se escriben en Odoo desde
-          acá. Los montos son derivados — la comisión de la liquidación, prorrateada por bruto — con
-          el IVA y la retención de ley.
-        </p>
-      ) : (
+      {!readOnly && (
         <>
       <div
         style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}
@@ -202,11 +196,6 @@ export function ProposedEntryTable({
         </p>
       )}
 
-      <p className="faint" style={{ marginTop: 10 }}>
-        Se crea en <strong>borrador</strong>, nunca contabilizado, y sólo en los diarios del plan
-        de cuentas que nos dieron. Volver a apretarlo no duplica: la referencia{' '}
-        <code>{entry.ref}</code> es la clave de idempotencia y se busca antes de escribir.
-      </p>
         </>
       )}
     </div>

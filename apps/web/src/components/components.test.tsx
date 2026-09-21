@@ -154,12 +154,6 @@ describe('ProposedEntryTable (F05-T05)', () => {
     expect(screen.getByRole('button', { name: /Crear asiento/ }).hasAttribute('disabled')).toBe(true);
   });
 
-  it('dice que el asiento va en borrador, porque eso es lo que lo hace reversible', () => {
-    render(<ProposedEntryTable entry={entry} journalKey="wompi" />);
-    expect(screen.getByText(/borrador/)).toBeDefined();
-    expect(screen.getByText(/idempotencia/)).toBeDefined();
-  });
-
   it('las líneas que le faltan a un asiento existente se muestran, sin botón', () => {
     // Agregarle líneas a un asiento contabilizado es decisión de un contador:
     // la corrección se ve, pero no se ofrece escribirla.
