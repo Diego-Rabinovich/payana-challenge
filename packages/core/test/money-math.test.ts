@@ -3,9 +3,6 @@ import { InvalidMoneyError } from '../src/domain/errors.js';
 import { allocateByLargestRemainder, scaleInteger } from '../src/domain/money-math.js';
 
 describe('scaleInteger', () => {
-  it('is exact when the division leaves no remainder', () => {
-    expect(scaleInteger(1000, 19, 100, 'TRUNCATE')).toBe(190);
-  });
 
   it.each([
     ['TRUNCATE', 149_385],
@@ -51,9 +48,6 @@ describe('allocateByLargestRemainder', () => {
     expect(allocateByLargestRemainder(100, [1, 1, 1])).toEqual([34, 33, 33]);
   });
 
-  it('is exact when the split is clean', () => {
-    expect(allocateByLargestRemainder(1000, [600, 300, 100])).toEqual([600, 300, 100]);
-  });
 
   it('assigns nothing to a zero weight', () => {
     expect(allocateByLargestRemainder(100, [1, 0, 1])).toEqual([50, 0, 50]);

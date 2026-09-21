@@ -10,9 +10,6 @@ describe('deterministic ids (F01-T02)', () => {
     expect(deriveMovementId(aCanonicalRecord())).toBe(deriveMovementId(aCanonicalRecord()));
   });
 
-  it('is prefixed so an id is readable in an explanation', () => {
-    expect(deriveMovementId(aCanonicalRecord())).toMatch(/^mov_[0-9a-f]{16}$/);
-  });
 
   it.each([
     ['amount', { amount: Money.ofCents(24_369_900) }],

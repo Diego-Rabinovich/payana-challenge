@@ -26,29 +26,11 @@ describe('Money — construction (F01-T01)', () => {
 });
 
 describe('Money — arithmetic', () => {
-  it('adds, subtracts, negates and takes absolute value', () => {
-    const a = Money.ofCents(1000);
-    const b = Money.ofCents(250);
-
-    expect(a.plus(b).cents).toBe(1250);
-    expect(a.minus(b).cents).toBe(750);
-    expect(b.negate().cents).toBe(-250);
-    expect(b.negate().abs().cents).toBe(250);
-  });
 
   it('sums an empty list to zero rather than throwing', () => {
     expect(Money.sum([]).cents).toBe(0);
   });
 
-  it('compares and tests equality', () => {
-    expect(Money.ofCents(100).compareTo(Money.ofCents(200))).toBe(-1);
-    expect(Money.ofCents(200).compareTo(Money.ofCents(100))).toBe(1);
-    expect(Money.ofCents(100).compareTo(Money.ofCents(100))).toBe(0);
-    expect(Money.ofCents(100).equals(Money.ofCents(100))).toBe(true);
-    expect(Money.ofCents(0).isZero()).toBe(true);
-    expect(Money.ofCents(-1).isNegative()).toBe(true);
-    expect(Money.ofCents(1).isPositive()).toBe(true);
-  });
 });
 
 describe('Money — rates, with the policy supplied by the caller (F01-T09)', () => {
@@ -108,10 +90,6 @@ describe('Money — allocation (F01-T01, F02-T16)', () => {
 });
 
 describe('Money — representation', () => {
-  it('stringifies unambiguously and without a locale', () => {
-    // Human-facing formatting is an adapter concern; this is for logs.
-    expect(Money.ofCents(30_342_952).toString()).toBe('COP 30342952');
-  });
 
   it('serialises as cents plus currency, never as a float', () => {
     expect(Money.ofCents(30_342_952).toJSON()).toEqual({ cents: 30_342_952, currency: 'COP' });

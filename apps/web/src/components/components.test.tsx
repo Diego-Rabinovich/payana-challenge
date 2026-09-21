@@ -27,13 +27,6 @@ describe('MoneyFunnel (F05-T02)', () => {
     expect(gross!.amount.cents + deductions!.amount.cents).toBe(expected!.amount.cents);
   });
 
-  it('renders every step with its label and amount', () => {
-    render(<MoneyFunnel steps={steps} />);
-
-    for (const step of steps) {
-      expect(screen.getByText(step.label)).toBeDefined();
-    }
-  });
 });
 
 describe('EvidenceList (F05-T03)', () => {

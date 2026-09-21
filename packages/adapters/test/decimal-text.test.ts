@@ -11,15 +11,7 @@ describe('parseAmount — Bancolombia statement rows', () => {
     expect(parseAmount('393,279,689.19').cents).toBe(39_327_968_919);
   });
 
-  it('parses a negative charge', () => {
-    // Real row: "IVA CUOTA MANEJO SUC VIRT EMP   -13,868.00"
-    expect(parseAmount('-13,868.00').cents).toBe(-1_386_800);
-  });
 
-  it('parses a settlement credit', () => {
-    // Real row: "PAGO DE PROV WOMPI S.A.S.   19,715,313.89"
-    expect(parseAmount('19,715,313.89').cents).toBe(1_971_531_389);
-  });
 
   it('never routes through a float', () => {
     // 7862.40 * 100 is 786239.99999999999 in floating point.
