@@ -8,7 +8,7 @@ Expose results to the challenge's **two users** through a single contract: a CFO
 
 ## 2. Scope
 
-**In:** the REST API with generated OpenAPI, domain → DTO presenters, static artifacts (`report.md`, `report.json`, `movements.ndjson`), error handling and the run model.
+**In:** the REST API with generated OpenAPI, domain → DTO presenters, static artifacts (`report.md`, `report.json`), error handling and the run model.
 
 **Out:** the UI (Spec 05) and the MCP server (Spec 06).
 
@@ -36,7 +36,7 @@ The explicit domain → DTO mapping. This is where the internal model is protect
 |---|---|
 | `GET /health` | Version, `rulesetVersion`, source status |
 | `GET /runs` · `POST /runs` · `GET /runs/{runId}` | Runs. `POST` replies `201` with `Location` |
-| `GET /runs/{runId}/report?format=md\|json\|ndjson` | The run artifact |
+| `GET /runs/{runId}/report?format=md\|json` | The run artifact. JSON is `RunReportDto` |
 | `GET /accounts` · `GET /accounts/{accountId}/movements` | Accounts and cursor-paginated movements |
 | `GET /movements/{movementId}` · `GET /movements/{movementId}/lineage` | Movement and where its money went |
 | `GET /runs/{runId}/summary` | The funnel and the counts the panel is built from |
@@ -76,7 +76,6 @@ Each run writes to `data/out/`:
 |---|---|---|
 | `report.md` | CFO | Executive summary, money funnel, exceptions ranked by amount at risk, and each one's detail in prose assembled from evidence codes |
 | `report.json` | AI | The same content, structured, with IDs, evidence, confidence and alternatives |
-| `movements.ndjson` | Both | Complete ledgers, one line per movement, for streaming |
 
 They matter because they are consumable **without starting the server**, they version and they diff. And they are deliverable 9.
 

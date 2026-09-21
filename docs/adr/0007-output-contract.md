@@ -12,6 +12,13 @@ The system has two explicit users: a human CFO and an AI accountant that must co
 
 Plus **static artifacts** per run: `report.md` (CFO), `report.json` (AI), `movements.ndjson` (ledgers for streaming).
 
+> **Correction (2026-09-21).** `movements.ndjson` was never built, and the API
+> advertised an `ndjson` format that answered 404; both are gone. And
+> `report.json` was, until now, the internal report serialised as stored —
+> phase 2 only, amounts as raw cents, explanations with `COP 2941468300` inside.
+> It is now `RunReportDto`: the same DTOs the API and the MCP return, with both
+> phases and the rubric, which is what this ADR described in the first place.
+
 Plus, as a cheap bonus, an **MCP server** wrapping the same use cases and returning the same DTOs.
 
 **The underlying thesis:** what an AI needs is not *another protocol*, it is a **stable, self-describing, deterministic schema with quotable IDs and a closed vocabulary of evidence codes**. Well-built REST delivers that. Changing protocol adds nothing; changing the shape of the data does.
