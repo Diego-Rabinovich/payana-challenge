@@ -16,7 +16,6 @@ import {
   RuleSet,
   type RuleSetConfig,
   type SourceConnector,
-  type SourceId,
   MergedSettlementRule,
   ScheduledSettlementRule,
   SplitSettlementRule,
@@ -80,7 +79,8 @@ export interface Dependencies {
   readonly statementDir: string;
   readonly calendar: BusinessCalendar;
   readonly accounts: { readonly wompi: ReturnType<typeof accountId>; readonly bank: ReturnType<typeof accountId> };
-  readonly sources: { readonly wompi: SourceId; readonly bank: SourceId };
+  
+  readonly connectors: ConnectorRegistry;
   readonly repositories: {
     readonly movements: MovementRepository;
     readonly rawRecords: RawRecordRepository;
@@ -107,11 +107,6 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
     wompi: accountId('wompi:AA'),
     bank: accountId(`bancolombia:${config.bancolombiaAccountNumber}`),
   };
-  const sources = {
-    wompi: sourceId('wompi:transactions'),
-    bank: sourceId('bancolombia:statement'),
-  };
-
   const db = new PgClient(config.databaseUrl);
   await db.migrate();
 
@@ -134,9 +129,9 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
   // llena subiendo el PDF desde la consola antes de una corrida.
   const statementDir = join(config.dataDir, 'statements');
 
-  const connectors = registryOf([
-    new WompiTransactionsConnector(sources.wompi, wompiClient),
-    new LocalFileConnector(sources.bank, statementDir, '.pdf'),
+   const connectors = registryOf([
+    new WompiTransactionsConnector(sourceId('wompi:transactions'), wompiClient),
+    new LocalFileConnector(sourceId('bancolombia:statement'), statementDir, '.pdf'),
   ]);
 
   const parsers = parserRegistryOf([
@@ -164,7 +159,7 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
     statementDir,
     calendar,
     accounts,
-    sources,
+    connectors,
     repositories,
     erp,
     useCases: {

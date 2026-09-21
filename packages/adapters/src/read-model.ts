@@ -329,7 +329,7 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       to,
     });
 
-    for (const sourceId of [deps.sources.wompi, deps.sources.bank]) {
+    for (const sourceId of deps.connectors.ids()) {
       await useCases.ingest.execute({ sourceId, range, runId });
     }
 
