@@ -82,3 +82,44 @@ describe('el asiento que corrige un traspaso', () => {
     expect(linea?.evidence.map((item) => item.code)).toContain('NO_CONTRA_ACCOUNT');
   });
 });
+
+/**
+ * El alcance: sólo se propone un asiento para plata que pasó por un canal.
+ *
+ * Una comisión del banco entra al extracto igual que un giro de Wompi, y el
+ * plan de cuentas sabe perfectamente dónde va. Por eso el filtro no puede ser
+ * «¿tiene cuenta?»: tiene que ser «¿es del canal?».
+ */
+describe('fuera del alcance del canal', () => {
+  it('no propone asiento para un cobro del banco aunque tenga cuenta en el plan', async () => {
+    const movements = new InMemoryMovementRepository();
+    await movements.upsertMany([
+      aMovement({
+        accountId: BANK,
+        externalId: 'cobro',
+        valueDate: Temporal.PlainDate.from('2026-01-15'),
+        type: 'FEE',
+        amount: Money.ofCents(-27_000),
+        description: 'SERVICIO E-MAILS ENVIADOS',
+        source: {
+          sourceId: aMovement().source.sourceId,
+          rawRecordId: aMovement().source.rawRecordId,
+          locator: 'cobro',
+        },
+      }),
+    ]);
+
+    const report = await new ReconcileErp(
+      new InMemoryErpGateway([]),
+      movements,
+      testAccountMap(),
+      new BusinessCalendar(TEST_HOLIDAYS),
+      undefined,
+      { ruleSet: RuleSet.from(TEST_RULESET_CONFIG) },
+    ).execute({ accountId: BANK, journalKey: 'bancolombia', range: RANGE });
+
+    const [linea] = report.lines;
+    expect(linea?.status).toBe('MISSING_IN_ERP');
+    expect(linea?.correction).toBeUndefined();
+  });
+});

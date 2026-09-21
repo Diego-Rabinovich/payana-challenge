@@ -206,6 +206,7 @@ export class ReconcileErp {
     missingConcepts: readonly (typeof group.concepts)[number][],
   ) {
     if (reason === 'INCOMPLETE_ENTRY' && missingConcepts.length === 0) return {};
+    if (!this.isChannelMoney(group, journalKey)) return {};
     if (group.concepts.some((concept) => !this.accountMap.isMapped(concept))) return {};
 
     // Un traspaso sólo se puede proponer si sabemos de qué otro libro salió.
@@ -226,6 +227,31 @@ export class ReconcileErp {
         ...(counterpart ? { counterpartJournalKey: counterpart } : {}),
       }),
     };
+  }
+
+  /**
+   * Si esta plata pasó por un canal que conciliamos.
+   *
+   * El alcance del challenge es Wompi → Bancolombia → Odoo. Una comisión del
+   * banco, un pago de nómina o un débito PSE entran al extracto igual que un
+   * giro de Wompi, pero proponer asientos para ellos es contabilizar por el
+   * cliente cosas que nadie nos pidió mirar — y hacerlo en un Odoo de
+   * producción.
+   *
+   * Dos maneras de ser del canal: estar en su propio diario, o que la
+   * contraparte del documento sea el canal. Las dos salen del ruleset, así que
+   * sumar una fuente no toca esta función.
+   *
+   * Sin ruleset no hay a quién preguntarle el alcance y se propone como antes;
+   * la composición de producción siempre lo pasa.
+   */
+  private isChannelMoney(group: LedgerGroup, journalKey: string): boolean {
+    const ruleSet = this.options.ruleSet;
+    if (!ruleSet) return true;
+    if (ruleSet.channelKeys.includes(journalKey)) return true;
+
+    const counterparty = group.movements.find((movement) => movement.counterparty)?.counterparty;
+    return ruleSet.channelFor(counterparty) !== undefined;
   }
 
   /**
