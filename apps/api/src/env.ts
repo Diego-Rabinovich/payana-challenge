@@ -15,7 +15,6 @@ const Env = z.object({
   NODE_ENV: z.string().default('development'),
   PORT: z.coerce.number().int().default(3100),
   LOG_LEVEL: z.string().default('info'),
-  SOURCE_MODE: z.enum(['fixtures', 'live']).default('fixtures'),
   DATA_DIR: z.string().default('./data'),
   CONFIG_DIR: z.string().default('./config'),
   DATABASE_URL: z.string(),
@@ -56,7 +55,6 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): ApiEnv {
     logLevel: env.LOG_LEVEL,
     corsOrigin: env.VITE_API_BASE_URL ? undefined : undefined,
     app: {
-      mode: env.SOURCE_MODE,
       dataDir: fromRepoRoot(env.DATA_DIR),
       configDir: fromRepoRoot(env.CONFIG_DIR),
       databaseUrl: env.DATABASE_URL,

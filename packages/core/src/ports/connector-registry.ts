@@ -2,8 +2,12 @@ import type { SourceId } from '../domain/ids.js';
 import type { SourceConnector } from './source-connector.js';
 
 /**
- * Resolves a configured source id to its connector. Backed by
- * config/sources.json, so declaring a source is configuration, not code.
+ * Resolves a source id to its connector.
+ *
+ * The composition root builds it from the connectors it constructs, so adding
+ * a source is one constructor call there. There used to be a
+ * config/sources.json that described sources declaratively; nothing ever read
+ * it, and a config file that is not loaded is documentation that drifts.
  */
 export interface ConnectorRegistry {
   get(sourceId: SourceId): SourceConnector;

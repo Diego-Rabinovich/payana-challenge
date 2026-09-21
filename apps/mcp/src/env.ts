@@ -16,7 +16,6 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): AppConfig {
   };
 
   return {
-    mode: source['SOURCE_MODE'] === 'live' ? 'live' : 'fixtures',
     dataDir: fromRepoRoot(source['DATA_DIR'] ?? './data'),
     configDir: fromRepoRoot(source['CONFIG_DIR'] ?? './config'),
     databaseUrl: required('DATABASE_URL'),
