@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Temporal } from '@js-temporal/polyfill';
 import { ParseIntegrityError, accountId, rawRecordId, sourceId } from '@aa/core';
@@ -8,14 +8,18 @@ import { BancolombiaStatementParser } from '../src/bancolombia/statement-parser.
 import type { DescriptorConfig } from '../src/bancolombia/descriptor-rules.js';
 
 /**
- * Run against the four real statements, not a fixture someone drew.
+ * Run against the real statements, not a fixture someone drew.
  *
  * A parser that only ever sees an idealised sample is a parser that has not
  * been tested: the whole risk lives in what the real documents do that a
  * hand-written example would not.
+ *
+ * Los extractos son reales y no se comitean: viven en `data/statements/`, que
+ * se llena subiéndolos desde la consola. Sin ellos este suite se saltea en vez
+ * de fallar — un clone limpio queda verde, y el reporte dice que se saltó.
  */
 const ROOT = resolve(process.cwd(), '../..');
-const STATEMENTS = resolve(ROOT, 'data/fixtures/bancolombia');
+const STATEMENTS = resolve(ROOT, 'data/statements');
 
 const descriptors = JSON.parse(
   readFileSync(resolve(ROOT, 'config/descriptors.json'), 'utf8'),
@@ -25,20 +29,27 @@ const ACCOUNT = accountId('bancolombia:00000000000');
 
 const parser = new BancolombiaStatementParser({ accountId: ACCOUNT, descriptors });
 
-function statementRecord(file: string): RawRecord {
+/** Un registro con el payload que se le pase. No lee nada del disco. */
+function recordWith(payload: RawRecord['payload'], name = 'extracto.pdf'): RawRecord {
   return {
-    id: rawRecordId(`raw_${file}`),
+    id: rawRecordId(`raw_${name}`),
     sourceId: sourceId('bancolombia:statement'),
-    origin: `file:${file}`,
+    origin: `file:${name}`,
     fetchedAt: Temporal.Instant.from('2026-09-19T12:00:00Z'),
-    contentHash: file,
-    payload: new Uint8Array(readFileSync(resolve(STATEMENTS, file))),
+    contentHash: name,
+    payload,
   };
 }
 
-const files = readdirSync(STATEMENTS).filter((name) => name.endsWith('.pdf'));
+function statementRecord(file: string): RawRecord {
+  return recordWith(new Uint8Array(readFileSync(resolve(STATEMENTS, file))), file);
+}
 
-describe('BancolombiaStatementParser — the four real statements', () => {
+const files = existsSync(STATEMENTS)
+  ? readdirSync(STATEMENTS).filter((name) => name.endsWith('.pdf'))
+  : [];
+
+describe.skipIf(files.length === 0)('BancolombiaStatementParser — the real statements', () => {
   it('finds the statements to parse', () => {
     expect(files.length).toBeGreaterThan(0);
   });
@@ -79,14 +90,20 @@ describe('BancolombiaStatementParser — the four real statements', () => {
     expect(wompi.every((record) => record.amount.isPositive())).toBe(true);
   });
 
-  it('keeps bank-originated movements out of the channel, but in the ledger', async () => {
+  it('keeps out-of-scope rows in the ledger, unclassified, so the balance still closes', async () => {
     const january = files.find((file) => file.includes('Enero'))!;
     const result = await parser.parse(statementRecord(january));
 
-    const interest = result.records.filter((record) => record.type === 'INTEREST');
+    // Intereses, comisiones e IVA del banco quedaron fuera del alcance: no
+    // tienen regla de descriptor y caen a OTHER, que no tiene cuenta, así que
+    // nunca se propone un asiento para ellos. Pero NO se descartan: la cadena
+    // de saldos sólo cierra con todas las filas adentro, y si faltara una el
+    // parse fallaría. Que esta línea se ejecute ya prueba que cerró.
+    const interest = result.records.filter((record) =>
+      record.description.startsWith('ABONO INTERESES'),
+    );
     expect(interest.length).toBeGreaterThan(0);
-    // They belong to the ledger — without them the balance would not close.
-    expect(interest.every((record) => record.counterparty === 'BANCOLOMBIA')).toBe(true);
+    expect(interest.every((record) => record.type === 'OTHER')).toBe(true);
   });
 
   it('cites the page and baseline of every row it read', async () => {
@@ -107,15 +124,13 @@ describe('BancolombiaStatementParser — the four real statements', () => {
 });
 
 describe('BancolombiaStatementParser — fails closed', () => {
+  // Estos dos corren siempre: prueban la salvaguarda, y la salvaguarda no
+  // necesita un extracto real para dispararse.
   it('rejects a payload that is not a statement', async () => {
-    const corrupt = { ...statementRecord(files[0]!), payload: new Uint8Array([0x25, 0x50, 0x44]) };
-
-    await expect(parser.parse(corrupt)).rejects.toThrow();
+    await expect(parser.parse(recordWith(new Uint8Array([0x25, 0x50, 0x44])))).rejects.toThrow();
   });
 
   it('refuses a string payload rather than guessing', async () => {
-    const wrong = { ...statementRecord(files[0]!), payload: 'PDF-ish text' };
-
-    await expect(parser.parse(wrong)).rejects.toThrow(ParseIntegrityError);
+    await expect(parser.parse(recordWith('PDF-ish text'))).rejects.toThrow(ParseIntegrityError);
   });
 });

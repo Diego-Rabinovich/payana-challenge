@@ -1,0 +1,5 @@
+# Extractos reales del banco. Se suben desde la consola antes de una corrida
+# y nunca se comitean. Este archivo es lo único que se versiona acá: mantiene
+# la carpeta en un clone limpio sin necesitar un .gitkeep.
+*
+!.gitignore

@@ -58,7 +58,6 @@ import {
  */
 
 export interface AppConfig {
-  readonly mode: 'fixtures' | 'live';
   readonly dataDir: string;
   readonly configDir: string;
   readonly databaseUrl: string;
@@ -130,7 +129,10 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
 
   // One directory, named once: the connector reads it and the upload writes
   // to it, so a statement that arrives either way behaves the same.
-  const statementDir = join(config.dataDir, 'fixtures/bancolombia');
+  // La bandeja de extractos. No es `fixtures/`: ahí van datos de prueba que se
+  // comitean, y un extracto real del banco no es ni lo uno ni lo otro. Se
+  // llena subiendo el PDF desde la consola antes de una corrida.
+  const statementDir = join(config.dataDir, 'statements');
 
   const connectors = registryOf([
     new WompiTransactionsConnector(sources.wompi, wompiClient),

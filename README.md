@@ -36,9 +36,11 @@ make up                  # db + api + web
 Ports are off the defaults on purpose — 5432, 3000 and 5173 are usually taken.
 To change one, edit `infra/docker-compose.yml`.
 
-Without credentials the system still runs: the four bank statements in
-`data/fixtures/bancolombia` parse offline, and `SOURCE_MODE=fixtures` in `.env`
-keeps Wompi and Odoo from being contacted at all.
+Wompi and Odoo are read live, so `.env` needs their credentials. The bank
+statements are real documents and are not in the repository: upload them from
+the console (**Nueva corrida**) before a run, or drop the PDFs in
+`data/statements/`. Without them the bank side is empty and every settlement
+comes out unmatched, which is the correct answer to having no statement.
 
 ### The batch pipeline
 
