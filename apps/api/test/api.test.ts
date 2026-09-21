@@ -107,6 +107,20 @@ describe('HTTP API', () => {
     expect(response.json()).toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('resolves `latest` for a run and its report too', async () => {
+    // Estas dos quedaron afuera del corte de rutas y contestaban 404.
+    expect((await get('/runs/latest')).statusCode).toBe(200);
+
+    const report = await get('/runs/latest/report?format=json');
+    expect(report.statusCode).toBe(200);
+    expect(report.headers['content-type']).toContain('application/json');
+  });
+
+  it('does not promise a format it cannot produce', async () => {
+    // ndjson figuraba en el esquema y devolvía 404: ahora es un 400 honesto.
+    expect((await get('/runs/run_1/report?format=ndjson')).statusCode).toBe(400);
+  });
+
   it('returns problem details for an unknown route too, never bare HTML', async () => {
     const response = await get('/nope');
 

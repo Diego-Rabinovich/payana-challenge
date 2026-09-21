@@ -173,7 +173,16 @@ export function stubDependencies(): ReadModel {
 
     runs: {
       list: async () => [],
-      find: async () => undefined,
+      find: async (runId) =>
+        runId === 'run_1'
+          ? {
+              id: 'run_1',
+              startedAt: '2026-04-30T12:00:00.000Z',
+              rulesetVersion: 'v1-test',
+              range: { from: '2026-01-01', to: '2026-04-30' },
+              inputHashes: {},
+            }
+          : undefined,
       // El stub reconoce una sola corrida y `latest`; cualquier otra cosa es
       // un 404, que es justamente lo que un test de alcance quiere poder ver.
       resolve: async (runId) => (runId === 'latest' || runId === 'run_1' ? 'run_1' : undefined),
@@ -184,7 +193,8 @@ export function stubDependencies(): ReadModel {
         range: { from, to },
         inputHashes: {},
       }),
-      reportArtifact: async () => undefined,
+      reportArtifact: async (runId, format) =>
+        runId === 'run_1' ? (format === 'md' ? '# Reporte' : '{"schema":"ok"}') : undefined,
     },
   };
 }

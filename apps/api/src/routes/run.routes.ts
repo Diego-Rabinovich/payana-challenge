@@ -1,8 +1,5 @@
 import {
   CreateRunDto,
-  EVIDENCE_CODES,
-  EVIDENCE_DIMENSIONS,
-  type EvidenceCode,
   ChannelDto,
   HealthDto,
   RubricDto,
@@ -15,8 +12,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { NotFoundError, RejectedError } from '../plugins/error-handler.js';
 import type { ReadModel } from '@aa/core';
-import { toChannelDto } from '@aa/adapters';
-import { attainableScore } from '@aa/core';
+import { toChannelDto, toRubricDto } from '@aa/adapters';
 
 export const runRoutes =
   (deps: ReadModel): FastifyPluginAsync =>
@@ -86,7 +82,8 @@ export const runRoutes =
         },
       },
       async (request) => {
-        const run = await deps.runs.find(request.params.runId);
+        const runId = await deps.runs.resolve(request.params.runId);
+        const run = runId ? await deps.runs.find(runId) : undefined;
         if (!run) throw new NotFoundError(`Run ${request.params.runId}`);
         return run;
       },
@@ -97,22 +94,23 @@ export const runRoutes =
       {
         schema: {
           tags: ['runs'],
-          summary: 'The run artifact: Markdown for a person, JSON or NDJSON for a machine',
-          params: z.object({ runId: z.string() }),
-          querystring: z.object({ format: z.enum(['md', 'json', 'ndjson']).default('json') }),
+          summary: 'The run artifact: Markdown for a person, JSON for a model',
+          description:
+            'El JSON son los mismos DTOs que sirve la API, con las dos fases y la rúbrica: ' +
+            'se valida contra RunReportDto. `latest` es un id válido.',
+          params: z.object({ runId: z.string().describe('Id de la corrida, o `latest`') }),
+          querystring: z.object({ format: z.enum(['md', 'json']).default('json') }),
         },
       },
       async (request, reply) => {
-        const { format } = request.query;
-        const artifact = await deps.runs.reportArtifact(request.params.runId, format);
-        if (!artifact) throw new NotFoundError(`Report for run ${request.params.runId}`);
+        const runId = await deps.runs.resolve(request.params.runId);
+        if (!runId) throw new NotFoundError(`Run ${request.params.runId}`);
 
-        const contentType =
-          format === 'md'
-            ? 'text/markdown; charset=utf-8'
-            : format === 'ndjson'
-              ? 'application/x-ndjson'
-              : 'application/json';
+        const { format } = request.query;
+        const artifact = await deps.runs.reportArtifact(runId, format);
+        if (!artifact) throw new NotFoundError(`Report for run ${runId}`);
+
+        const contentType = format === 'md' ? 'text/markdown; charset=utf-8' : 'application/json';
         return reply.type(contentType).send(artifact);
       },
     );
@@ -187,35 +185,10 @@ export const runRoutes =
           response: { 200: RubricDto },
         },
       },
-      // Served from the contract and the live ruleset rather than from a page
-      // someone maintains by hand: a weight that changes in config changes
-      // here on the next request, so the glossary cannot go stale.
-      async () => {
-        const { weights, exclusiveDimensions, bands, ambiguityDelta, disqualifying } =
-          deps.ruleSet.config;
-
-        const groupOf = (code: string) =>
-          Object.values(exclusiveDimensions).find((codes) =>
-            (codes as readonly string[]).includes(code),
-          ) ?? [];
-
-        return {
-          rulesetVersion: deps.rulesetVersion,
-          attainable: attainableScore(deps.ruleSet.scoring),
-          bands,
-          ambiguityDelta,
-          codes: EVIDENCE_CODES.map((code) => ({
-            code,
-            dimension: EVIDENCE_DIMENSIONS[code],
-            ...(weights[code] !== undefined ? { weight: weights[code] } : {}),
-            disqualifying: (disqualifying ?? []).includes(code),
-            exclusiveWith: (groupOf(code) as readonly EvidenceCode[]).filter(
-              (other) => other !== code,
-            ),
-            meaning: code,
-          })),
-        };
-      },
+      // Served from the live ruleset rather than from a page someone maintains
+      // by hand, through the same function the run report uses — so the
+      // glossary and the file a model reads cannot disagree about a weight.
+      async () => toRubricDto(deps.ruleSet, deps.rulesetVersion),
     );
   };
 
