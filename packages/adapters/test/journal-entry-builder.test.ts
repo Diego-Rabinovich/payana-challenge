@@ -296,3 +296,49 @@ describe('toJournalEntry, cuando el banco reversa un cobro', () => {
     expect(entryBalances(entry)).toBe(true);
   });
 });
+
+/**
+ * Lo que Wompi retuvo, en los dos asientos que lo usan: las líneas que le faltan
+ * a un asiento de venta que ya existe, y la venta que falta propuesta completa.
+ */
+describe('toJournalEntry, con las deducciones de Wompi', () => {
+  const FEE = 740_000;
+  const TAX = 140_600;
+  const WITHHOLDING = 476_323;
+  const RETAINED = FEE + TAX + WITHHOLDING;
+
+  it('el complemento lleva las tres cuentas contra la de Wompi, y cuadra', () => {
+    const entry = toJournalEntry(
+      correction({
+        ref: 'ded:mov_0123456789abcdef',
+        reason: 'INCOMPLETE_ENTRY',
+        lines: [
+          { concept: 'FEE', amount: Money.ofCents(-FEE), label: 'Comisión' },
+          { concept: 'TAX', amount: Money.ofCents(-TAX), label: 'IVA' },
+          { concept: 'WITHHOLDING', amount: Money.ofCents(-WITHHOLDING), label: 'Retención' },
+        ],
+        netToAccount: Money.ofCents(-RETAINED),
+        mainLabel: 'Retenido por Wompi',
+        readOnly: true,
+      }),
+      CHART,
+    );
+
+    expect(entryBalances(entry)).toBe(true);
+    expect(entry.lines.map((line) => line.accountCode).sort()).toEqual(
+      ['1110001', '236500', '240810', '530505'],
+    );
+    const wompi = entry.lines.find((line) => line.accountCode === '1110001')!;
+    expect(wompi.credit.cents).toBe(RETAINED);
+    expect(wompi.label).toBe('Retenido por Wompi');
+  });
+
+  it('la venta completa son cinco líneas: neto, tres deducciones y el bruto', () => {
+    const entry = toJournalEntry(correction(), CHART);
+
+    expect(entryBalances(entry)).toBe(true);
+    expect(entry.lines).toHaveLength(5);
+    expect(entry.lines.find((line) => line.accountCode === '420500')!.credit.cents).toBe(GROSS);
+    expect(entry.lines.find((line) => line.accountCode === '1110001')!.debit.cents).toBe(NET);
+  });
+});

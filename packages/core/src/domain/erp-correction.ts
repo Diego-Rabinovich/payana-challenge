@@ -50,6 +50,21 @@ export interface ErpCorrection {
   readonly counterpartJournalKey?: string;
   /** What actually moved into the account: gross less every deduction. */
   readonly netToAccount: Money;
+  /**
+   * Cómo nombrar la línea de la cuenta principal. Sin esto el adapter la llama
+   * «neto acreditado» o «neto debitado», que para un asiento de deducciones —
+   * donde esa línea es lo que el canal retuvo — sería falso.
+   */
+  readonly mainLabel?: string;
+  /**
+   * Sólo para mostrar: nunca se escribe en Odoo.
+   *
+   * Es lo que lleva el complemento de un asiento que ya existe. Agregarle
+   * líneas a un asiento contabilizado no es algo que este sistema haga: se
+   * muestra cómo quedaría y lo decide un contador. La referencia tampoco es
+   * `mov:`, así que el guard de escritura y la API la rechazan igual.
+   */
+  readonly readOnly?: boolean;
 }
 
 export function idempotencyKeyFor(movementId: MovementId): string {

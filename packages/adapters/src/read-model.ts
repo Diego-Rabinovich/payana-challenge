@@ -205,6 +205,9 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         const report = reviveErpReport(stored);
         const line = report.lines.find((candidate) => candidate.correction?.ref === ref);
         if (!line?.correction) throw new Error(`No hay una corrección con referencia ${ref}`);
+        if (line.correction.readOnly) {
+          throw new Error('Esa corrección es sólo para mostrar: no se escribe en Odoo');
+        }
 
         return deps.erp.createDraftEntry(line.correction);
       },
@@ -377,6 +380,9 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         journalKey,
         range,
         runId,
+        // Sólo el diario del canal: ahí van las deducciones de cada liquidación.
+        // La fase 2 ya terminó; esto la lee, no la cambia.
+        ...(journalKey === 'wompi' ? { settlements: flowReport.matches } : {}),
       });
       await repositories.reports.save({
         runId,

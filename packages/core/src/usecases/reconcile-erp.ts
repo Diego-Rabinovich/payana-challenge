@@ -11,6 +11,10 @@ import {
 } from '../domain/erp-reconciliation.js';
 import { evidence } from '../domain/evidence.js';
 import type { AccountId, RunId } from '../domain/ids.js';
+import type { MatchResult } from '../domain/match-result.js';
+import type { Movement } from '../domain/movement.js';
+import type { ErpEntry } from '../domain/erp-entry.js';
+import type { ErpCorrection } from '../domain/erp-correction.js';
 import { Money } from '../domain/money.js';
 import { buildCorrection } from '../domain/erp-correction.js';
 import type { ErpGateway } from '../ports/erp-gateway.js';
@@ -33,6 +37,18 @@ export interface ReconcileErpInput {
   readonly journalKey: string;
   readonly range: DateRange;
   readonly runId?: RunId;
+  /**
+   * Los resultados de la fase 2, para el diario del canal. Se leen, no se
+   * tocan: de ahí salen la comisión, el IVA y la retención de cada liquidación.
+   */
+  readonly settlements?: readonly MatchResult[];
+}
+
+/** La parte de las deducciones de una liquidación que le toca a una venta. */
+interface DeductionShare {
+  readonly fee: Money;
+  readonly tax: Money;
+  readonly withholding: Money;
 }
 
 export interface ReconcileErpOptions {
@@ -89,6 +105,7 @@ export class ReconcileErp {
     };
 
     const groups = groupForComparison(ledgerMovements);
+    const shares = this.deductionShares(input.settlements, ledgerMovements);
     // Decided over the whole journal at once, not one group at a time: the
     // old cascade let whichever group came first claim an entry, which on a
     // day with several movements handed it to the wrong one. See
@@ -97,7 +114,7 @@ export class ReconcileErp {
 
     const lines: ErpReconciliationLine[] = [
       ...this.duplicateLines(groups, index),
-      ...groups.map((group) => this.reconcileGroup(group, assignment, context, input)),
+      ...groups.map((group) => this.reconcileGroup(group, assignment, context, input, shares)),
       ...this.orphanEntries(index),
     ];
 
@@ -148,10 +165,38 @@ export class ReconcileErp {
     assignment: ErpAssignment,
     context: ErpMatchContext,
     input: ReconcileErpInput,
+    shares: ReadonlyMap<string, DeductionShare>,
   ): ErpReconciliationLine {
+    const share = shareOf(group, shares);
     const match = assignment.get(group.key);
     if (match) {
       const assessment = assessMatch(group, match, context);
+
+      // El asiento registra la venta al bruto y nada más. La venta coincide,
+      // pero Wompi se quedó una comisión, su IVA y una retención que ese asiento
+      // no dice: le faltan líneas. Se muestran, sin ofrecer escribirlas.
+      if (assessment.status === 'MATCHED' && share && !this.touchesDeductions(match.entry)) {
+        return {
+          status: 'INCOMPLETE_ENTRY',
+          matchLevel: match.level,
+          ledgerMovementIds: group.movements.map((movement) => movement.id),
+          erpEntryId: match.entry.id,
+          erpEntryName: match.entry.name,
+          erpEntryState: match.entry.state,
+          ...describe(group),
+          date: group.date,
+          ledgerAmount: assessment.ledgerAmount,
+          ...(assessment.erpAmount ? { erpAmount: assessment.erpAmount } : {}),
+          evidence: [
+            ...assessment.evidence,
+            evidence('INCOMPLETE_ENTRY', 'ERP', false, {
+              detail: 'faltan: FEE, TAX, WITHHOLDING',
+            }),
+            derivedEvidence(share),
+          ],
+          correction: missingLines(group, share, input.journalKey),
+        };
+      }
 
       return {
         status: assessment.status,
@@ -185,8 +230,9 @@ export class ReconcileErp {
         }),
         ...this.unmappedEvidence(group, context),
         ...this.contraEvidence(group, input.journalKey),
+        ...(share ? [derivedEvidence(share)] : []),
       ],
-      ...this.correctionFor(group, input.journalKey, 'MISSING_ENTRY', []),
+      ...this.correctionFor(group, input.journalKey, 'MISSING_ENTRY', [], share),
     };
   }
 
@@ -204,6 +250,7 @@ export class ReconcileErp {
     journalKey: string,
     reason: 'MISSING_ENTRY' | 'INCOMPLETE_ENTRY',
     missingConcepts: readonly (typeof group.concepts)[number][],
+    share?: DeductionShare,
   ) {
     if (reason === 'INCOMPLETE_ENTRY' && missingConcepts.length === 0) return {};
     if (!this.isChannelMoney(group, journalKey)) return {};
@@ -218,15 +265,73 @@ export class ReconcileErp {
     const counterpart = transfer ? this.counterpartJournalOf(group, journalKey) : undefined;
     if (transfer && counterpart === undefined) return {};
 
-    return {
-      correction: buildCorrection({
-        movements: group.movements,
-        journalKey,
-        reason,
-        missingConcepts,
-        ...(counterpart ? { counterpartJournalKey: counterpart } : {}),
-      }),
-    };
+    const correction = buildCorrection({
+      movements: group.movements,
+      journalKey,
+      reason,
+      missingConcepts,
+      ...(counterpart ? { counterpartJournalKey: counterpart } : {}),
+    });
+
+    // Una venta que falta se propone completa: además del bruto, lo que Wompi
+    // retuvo. El adapter la arma como D neto + D comisión + D IVA + D retención
+    // contra C ventas al bruto, que es como tendría que haber quedado.
+    return { correction: share ? withDeductions(correction, share) : correction };
+  }
+
+  /**
+   * La parte que le toca a cada venta de lo que el canal retuvo en su liquidación.
+   *
+   * Wompi no informa la comisión por transacción: la fase 2 la deriva por
+   * liquidación. Se reparte entre los pagos del lote en proporción al bruto,
+   * con el mismo reparto de restos que usa *Correlacionar* para el neto
+   * atribuido, así que las partes suman exacto lo derivado. Sólo liquidaciones
+   * cuyo desglose cerró contra el IVA de ley: repartir un split que el propio
+   * modelo no cree sería inventar la comisión de cada venta.
+   */
+  private deductionShares(
+    settlements: readonly MatchResult[] | undefined,
+    movements: readonly Movement[],
+  ): Map<string, DeductionShare> {
+    const shares = new Map<string, DeductionShare>();
+    if (!settlements) return shares;
+
+    const byId = new Map(movements.map((movement) => [movement.id as string, movement]));
+    for (const match of settlements) {
+      const derived = match.derivedDeductions;
+      if (!derived?.consistent) continue;
+
+      const charges = match.left.chargeIds
+        .map((id) => byId.get(id))
+        .filter((movement): movement is Movement => movement !== undefined);
+      if (charges.length !== match.left.chargeIds.length) continue;
+
+      const weights = charges.map((movement) =>
+        movement.type === 'CHARGE' && movement.amount.isPositive() ? movement.amount.cents : 0,
+      );
+      if (weights.every((weight) => weight === 0)) continue;
+
+      const fees = derived.fee.allocate(weights);
+      const taxes = derived.tax.allocate(weights);
+      const withholdings = derived.withholding.allocate(weights);
+      charges.forEach((movement, index) => {
+        if (weights[index] === 0) return;
+        shares.set(movement.id, {
+          fee: fees[index]!,
+          tax: taxes[index]!,
+          withholding: withholdings[index]!,
+        });
+      });
+    }
+    return shares;
+  }
+
+  /** Si el asiento ya tiene alguna línea de comisión, IVA o retención. */
+  private touchesDeductions(entry: ErpEntry): boolean {
+    const codes = (['FEE', 'TAX', 'WITHHOLDING'] as const)
+      .map((type) => this.accountMap.accountFor(type)?.code)
+      .filter((code): code is string => code !== undefined);
+    return entry.lines.some((line) => codes.includes(line.accountCode));
   }
 
   /**
@@ -351,5 +456,68 @@ function summarise(
     ledgerTotal,
     erpTotal,
     unexplained: erpTotal.minus(ledgerTotal),
+  };
+}
+
+/** La parte de las deducciones que le toca al pago de este grupo, si la hay. */
+function shareOf(
+  group: LedgerGroup,
+  shares: ReadonlyMap<string, DeductionShare>,
+): DeductionShare | undefined {
+  const charge = group.movements.find((movement) => movement.type === 'CHARGE');
+  return charge ? shares.get(charge.id) : undefined;
+}
+
+/** Que las deducciones de esta línea son derivadas, y cómo se repartieron. */
+function derivedEvidence(share: DeductionShare) {
+  return evidence('DEDUCTIONS_DERIVED', 'AMOUNT', true, {
+    observed: 'prorrateado por bruto dentro de su liquidación',
+    detail:
+      `comisión ${share.fee.toString()} · IVA ${share.tax.toString()} · ` +
+      `retención ${share.withholding.toString()}`,
+  });
+}
+
+/**
+ * Las líneas que le faltan a un asiento de venta que ya existe.
+ *
+ * Tres débitos —comisión, IVA descontable, retención— contra la cuenta de
+ * Wompi, que así queda con el neto que efectivamente va a llegar al banco.
+ * Sólo para mostrar: agregarle líneas a un asiento contabilizado es decisión
+ * de un contador. Referencia `ded:`, no `mov:`, así que no hay forma de
+ * escribirlo desde este sistema.
+ */
+function missingLines(group: LedgerGroup, share: DeductionShare, journalKey: string): ErpCorrection {
+  const charge = group.movements.find((movement) => movement.type === 'CHARGE') ?? group.movements[0]!;
+  const total = share.fee.plus(share.tax).plus(share.withholding);
+  return {
+    ref: `ded:${charge.id}`,
+    journalKey,
+    date: group.date,
+    reason: 'INCOMPLETE_ENTRY',
+    missingConcepts: ['FEE', 'TAX', 'WITHHOLDING'],
+    lines: [
+      { concept: 'FEE', amount: share.fee.negate(), label: 'Comisión, prorrateada' },
+      { concept: 'TAX', amount: share.tax.negate(), label: 'IVA de la comisión, prorrateado' },
+      { concept: 'WITHHOLDING', amount: share.withholding.negate(), label: 'Retención, prorrateada' },
+    ],
+    netToAccount: total.negate(),
+    mainLabel: 'Retenido por Wompi',
+    readOnly: true,
+  };
+}
+
+/** La corrección de una venta que falta, completada con lo que Wompi retuvo. */
+function withDeductions(correction: ErpCorrection, share: DeductionShare): ErpCorrection {
+  const total = share.fee.plus(share.tax).plus(share.withholding);
+  return {
+    ...correction,
+    lines: [
+      ...correction.lines,
+      { concept: 'FEE', amount: share.fee.negate(), label: 'Comisión, prorrateada' },
+      { concept: 'TAX', amount: share.tax.negate(), label: 'IVA de la comisión, prorrateado' },
+      { concept: 'WITHHOLDING', amount: share.withholding.negate(), label: 'Retención, prorrateada' },
+    ],
+    netToAccount: correction.netToAccount.minus(total),
   };
 }

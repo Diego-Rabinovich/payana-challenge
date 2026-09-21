@@ -78,7 +78,7 @@ export function toJournalEntry(
       accountName: journal.name,
       debit: arrives ? net.abs() : Money.zero(),
       credit: arrives ? Money.zero() : net.abs(),
-      label: arrives ? 'Neto acreditado' : 'Neto debitado',
+      label: correction.mainLabel ?? (arrives ? 'Neto acreditado' : 'Neto debitado'),
     });
   }
 
