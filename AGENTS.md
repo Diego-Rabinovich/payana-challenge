@@ -111,7 +111,8 @@ These are production credentials against a live business.
 ## Adding things
 
 **A new source** is a parser in `packages/adapters` (and a connector only if
-the transport is new), one constructor call in `composition.ts`, and its
+the transport is new), its ids and instances in `composition.ts`, its id in
+the ingest loop of `runPipeline`, and its
 descriptors in `config/descriptors.json`. If it batches on a different
 schedule, that is a `settlement` block on its channel in
 `config/ruleset.v1.json` — `cadence`, and for a weekly channel `weekEndsOn`.

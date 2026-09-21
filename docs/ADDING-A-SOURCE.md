@@ -55,10 +55,17 @@ Three obligations that are not negotiable:
 
 If the bytes come from a file or from an HTTP API, reuse what is there.
 
-### 4. Declare it
+### 4. Wire it
 
-One constructor call in `composition.ts`, where the connector and parser
-registries are built. That is the only line that knows the class exists.
+Nothing is discovered automatically. In `composition.ts`: the source's account
+and source ids, a connector instance and a parser instance — a reused connector
+class still needs its own instance, because the instance carries the source id.
+
+Then add the source id to the ingest loop in `runPipeline` (`read-model.ts`),
+which lists sources by hand. If the source is a new sales channel to reconcile
+against the bank, it also needs its `settlement` and `deductions` block in
+`config/ruleset.v1.json` and its own `reconcileFlow` call in `runPipeline`,
+which today is written for Wompi.
 
 ### 5. If it brings new concepts
 
@@ -82,13 +89,14 @@ test of a canonical model is that a new source does not extend it.
 git diff --stat
 ```
 
-Only `packages/adapters/src/<source>/`, one line of `composition.ts`, its
-descriptors in `config/descriptors.json` and the tests should appear. Anything else — core, the pipeline, the API, the frontend, the rules —
+Only `packages/adapters/src/<source>/`, a few lines of `composition.ts` and
+`read-model.ts`, its descriptors in `config/descriptors.json` and the tests
+should appear. Anything else — core, the pipeline, the API, the frontend, the rules —
 means the canonical model fell short, and that is an ADR, not a patch.
 
 | Piece | Lines |
 |---|---:|
 | `RecordParser` | ~80 |
 | `SourceConnector`, only if the transport is new | ~40 |
-| `composition.ts` | 1–2 |
+| `composition.ts` + `read-model.ts` | ~5 |
 | Tests | ~60 |
