@@ -48,7 +48,8 @@ make down                          # stop everything
 
 ## Reading the output
 
-`data/out/report.md` is for the CFO; the console downloads the same file.
+`make demo` writes `data/out/report.md`, for the CFO; the console downloads the
+same file. Neither is committed: they carry real amounts.
 
 - **Wompi → Bancolombia**: the funnel (gross − deductions = expected vs
   credited) and how many settlements are `CONFIRMED` / `PROBABLE` /
