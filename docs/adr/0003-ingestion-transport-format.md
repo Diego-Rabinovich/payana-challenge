@@ -26,6 +26,13 @@ Sources are declared in `config/sources.json`, not in code.
 
 ## Consequences
 
+> **Correction (2026-09-21).** The declarative half of this decision was never
+> built. `config/sources.json` existed and was never read: connectors and
+> parsers are constructed in `composition.ts`, so a new source is one line
+> there, not a config entry. The file was removed rather than kept as
+> documentation that looked like configuration. The separation of transport
+> from format — the substance of this ADR — stands and is what the code does.
+
 **Cost of a new source:** one `RecordParser` (~80 lines), one entry in `config/sources.json`, a fixture and its test. If the transport is also new, one `SourceConnector` (~40 lines). Zero changes in `core`, in the API or in the frontend.
 
 That is demonstrated with an isolated commit (UberEats) and documented in `docs/ADDING-A-SOURCE.md`, which is the answer to the brief's "show it".

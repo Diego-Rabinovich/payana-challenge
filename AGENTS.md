@@ -110,12 +110,13 @@ These are production credentials against a live business.
 
 ## Adding things
 
-**A new source** is a connector plus a parser in `packages/adapters`, an entry
-in `config/sources.json` and one in `config/descriptors.json`. If it also
-batches on a different schedule, that is a `settlement` block on its channel in
-`config/ruleset.v1.json` — `cadence`, and for a weekly channel `weekEndsOn`,
-the ISO weekday it closes on. None of that touches `core`, and a test fails if
-it does.
+**A new source** is a parser in `packages/adapters` (and a connector only if
+the transport is new), one constructor call in `composition.ts`, and its
+descriptors in `config/descriptors.json`. If it batches on a different
+schedule, that is a `settlement` block on its channel in
+`config/ruleset.v1.json` — `cadence`, and for a weekly channel `weekEndsOn`.
+None of that touches `core`; dependency-cruiser fails the build if `core`
+starts importing from `adapters`.
 
 **A new matching rule** is a class implementing `MatchingRule` plus a line in
 the composition root. Do not add ordering logic: every rule runs and the score

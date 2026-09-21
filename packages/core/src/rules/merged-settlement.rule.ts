@@ -23,8 +23,10 @@ import { eligibleDeposits, expectedTotal, describeAmounts } from './settlement-e
  * usual commission, to the point. Neither batch can claim the credit on its
  * own and neither should, so this rule claims nothing. It produces a candidate
  * with no deposits, which can never win, carrying the evidence that says where
- * the money went. The batch comes out AMBIGUOUS with an explanation instead of
- * UNMATCHED with a shrug.
+ * the money went. The batch still comes out UNMATCHED — it is: nothing can be
+ * attributed to it — but with the explanation attached instead of a shrug.
+ * Calling it AMBIGUOUS would claim there were several answers, when there is
+ * exactly one we cannot book.
  *
  * Attributing the credit properly would mean letting one result span several
  * batches, which `MatchResult` cannot express today. Saying so is better than

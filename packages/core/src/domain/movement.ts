@@ -45,7 +45,7 @@ export interface SourceRef {
 export interface RawRecord {
   readonly id: RawRecordId;
   readonly sourceId: SourceId;
-  /** Where it came from: "file:data/fixtures/…", an URL, or "webhook". */
+  /** Where it came from: "file:Extracto_Enero.pdf", an URL, or "webhook". */
   readonly origin: string;
   readonly fetchedAt: Temporal.Instant;
   /** sha256 of the payload. Detects that a source changed under us. */
