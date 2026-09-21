@@ -49,14 +49,14 @@ make down                          # stop everything
 ## Reading the output
 
 `make demo` writes `data/out/report.md`, for the CFO; the console downloads the
-same file. Neither is committed: they carry real amounts.
+same file. 
 
 - **Wompi → Bancolombia**: the funnel (gross − deductions = expected vs
   credited) and how many settlements are `CONFIRMED` / `PROBABLE` /
   `UNMATCHED`. The deductions are derived: gross − credited.
-- **Contra el ERP**: per journal, entries that match, that are incomplete
+- **versus the ERP**: per journal, entries that match, that are incomplete
   (lack the deduction lines) and that are missing.
-- **Excepciones**: every settlement that is not `CONFIRMED`, with each evidence
+- **Exceptions**: every settlement that is not `CONFIRMED`, with each evidence
   code as ✓/✗ and what was expected against what was observed.
 
 `data/out/report.json` has everything, line by line: the API's DTOs for both
