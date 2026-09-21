@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "conciliacion": {
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "infra/docker-compose.yml",
+        "--profile",
+        "tools",
+        "run",
+        "--rm",
+        "-T",
+        "mcp"
+      ]
+    }
+  }
+}
