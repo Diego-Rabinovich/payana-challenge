@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, show } from '../api/client.js';
 import { ConfidenceMeter, EvidenceList, StatusChip } from '../components/Confidence.js';
 import { PeriodFilter, StatusFilter, Pager, useFilter, useRun } from '../components/Filters.js';
+import { Collapsible } from '../components/Collapsible.js';
 import { SettlementDetail } from '../components/SettlementDetail.js';
 import { Empty, Failed, Loading } from '../components/States.js';
 import { useResource } from '../lib/useResource.js';
@@ -171,7 +172,12 @@ function Row({
                 </div>
               </div>
 
-              <EvidenceList confidence={match.confidence} />
+              <Collapsible
+                title="Evidencia"
+                count={`${match.confidence.components.length} controles · ${match.confidence.earned} de ${match.confidence.attainable} puntos`}
+              >
+                <EvidenceList confidence={match.confidence} />
+              </Collapsible>
 
               <SettlementDetail match={match} />
             </div>

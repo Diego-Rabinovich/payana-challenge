@@ -33,7 +33,7 @@ export function App() {
       <div className="shell__main">
         <header className="topbar">
           <div>
-            <h1>¿Dónde está la plata?</h1>
+            <h1>Sistema de conciliación</h1>
             <p>Alimentos Alcázar · Wompi → Bancolombia → Odoo</p>
           </div>
           {run && (

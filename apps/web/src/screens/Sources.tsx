@@ -145,12 +145,6 @@ function Measured({ channel }: { channel: ChannelDto }) {
         </table>
       </div>
 
-      <p className="faint">
-        Esta banda no está en la configuración y no debería estarlo: se mide sobre las
-        liquidaciones que ya cruzaron, en una segunda pasada que sólo suma puntos. Como no puede
-        rechazar nada, usar los datos de la propia corrida no es circular — y cada corrida queda
-        juzgada contra su propio período en vez de contra el que alguien midió por última vez.
-      </p>
     </>
   );
 }

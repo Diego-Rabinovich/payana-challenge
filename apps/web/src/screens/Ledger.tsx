@@ -74,7 +74,7 @@ function LedgerFor({ accounts }: { accounts: readonly AccountDto[] }) {
       <h2 className="card__title">Ledger</h2>
       <p className="card__hint">
         Los movimientos de una cuenta, en orden, cada uno trazable hasta el documento del que
-        salió. Es la salida de la fase 1 y la base de todo lo demás.
+        salió.
       </p>
 
       <div className="segmented">

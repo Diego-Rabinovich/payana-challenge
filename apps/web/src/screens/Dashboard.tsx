@@ -101,7 +101,7 @@ function Funnel({ summary }: { summary: ReconciliationSummaryDto }) {
 
   return (
     <div className="card">
-      <h2 className="card__title">¿Dónde está la plata?</h2>
+      <h2 className="card__title">Resumen del período</h2>
       <p className="card__hint">
         De lo que se vendió por Wompi, cuánto llegó a Bancolombia.
       </p>

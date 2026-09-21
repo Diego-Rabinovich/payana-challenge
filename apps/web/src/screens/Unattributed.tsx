@@ -42,14 +42,6 @@ export function Unattributed() {
   return (
     <div className="card">
       <h2 className="card__title">Ingresos que ningún lote reclamó</h2>
-      <p className="card__hint">
-        {channel === 'wompi'
-          ? 'Plata que llegó desde Wompi sin una liquidación que la explique. Suele ser el pago de un lote anterior al período, o dos lotes cobrados en un solo giro.'
-          : channel === 'other'
-            ? 'Intereses, transferencias de otros pagadores, cargos del banco. No forman parte de la conciliación de Wompi; están acá para que nadie los dé por perdidos.'
-            : 'Todo lo que entró al banco sin lote asociado, venga de donde venga.'}
-      </p>
-
       <PeriodFilter filter={filter} onChange={update}>
         <label className="field">
           <span>Origen</span>

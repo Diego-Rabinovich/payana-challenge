@@ -666,3 +666,61 @@ input[type='date'], input[type='text'], select {
   .funnel__value { grid-column: 2; }
   .step { grid-template-columns: 1fr; gap: 4px; }
 }
+
+/* ------------------------------------------------------------ plegables */
+
+/* Una sección del detalle. Arranca cerrada; ver Collapsible.tsx. */
+.fold {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface, transparent);
+}
+
+.fold + .fold { margin-top: 8px; }
+
+.fold__summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  border-radius: 8px;
+}
+
+.fold__summary::-webkit-details-marker { display: none; }
+
+/* El triángulo, dibujado acá para que gire con el estado del details. */
+.fold__summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--ink-faint);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 120ms ease;
+  flex: none;
+  align-self: center;
+}
+
+.fold[open] > .fold__summary::before { transform: rotate(90deg); }
+
+.fold__summary:hover { background: var(--line-soft); }
+.fold__summary:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+.fold__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.fold__count { font-size: 12px; color: var(--ink-faint); font-weight: 400; }
+
+.fold__body { padding: 2px 12px 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fold__summary::before { transition: none; }
+}

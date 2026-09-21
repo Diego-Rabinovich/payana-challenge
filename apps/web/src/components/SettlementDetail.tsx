@@ -1,6 +1,7 @@
 import type { MovementDto, ReconciliationDto } from '@aa/contracts';
 import { Link } from 'react-router-dom';
 import { api, show } from '../api/client.js';
+import { Collapsible } from './Collapsible.js';
 import { Loading } from './States.js';
 import { useResource } from '../lib/useResource.js';
 
@@ -14,7 +15,13 @@ import { useResource } from '../lib/useResource.js';
  * arithmetic can be checked by hand against a statement.
  */
 export function SettlementDetail({ match }: { match: ReconciliationDto }) {
-  const detail = useResource(() => api.settlementMovements(match.id), [match.id]);
+  // La corrida sale del resultado que estamos mostrando, no de la URL: el id
+  // de un match es estable entre corridas, así que pedir sus movimientos sin
+  // decir cuál devolvía los de la última aunque estuvieras viendo otra.
+  const detail = useResource(
+    () => api.settlementMovements(match.id, match.runId),
+    [match.id, match.runId],
+  );
 
   if (detail.state === 'loading') return <Loading what="los pagos" />;
   if (detail.state === 'failed') return <p className="faint">No se pudieron leer los pagos.</p>;
@@ -25,16 +32,11 @@ export function SettlementDetail({ match }: { match: ReconciliationDto }) {
   const kept = chargeTotal - creditTotal;
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      <div>
-        <div className="section-title" style={{ marginTop: 0 }}>
-          Qué se liquidó · {charges.length} {charges.length === 1 ? 'pago' : 'pagos'} de Wompi
-        </div>
-        <p className="faint" style={{ marginTop: -4 }}>
-          Una liquidación son los pagos que Wompi gira juntos: todos los que vencen el mismo día
-          hábil. Un sábado y un domingo caen en el mismo giro del lunes, porque la pasarela no
-          transfiere el fin de semana.
-        </p>
+    <div style={{ display: 'grid', gap: 8 }}>
+      <Collapsible
+        title="Qué se liquidó"
+        count={`${charges.length} ${charges.length === 1 ? 'pago' : 'pagos'} de Wompi`}
+      >
         <MovementTable movements={charges} linkable />
         <Totals
           rows={[
@@ -43,29 +45,26 @@ export function SettlementDetail({ match }: { match: ReconciliationDto }) {
             ['Acreditado en Bancolombia', money(creditTotal)],
           ]}
         />
-      </div>
+      </Collapsible>
 
-      <div>
-        <div className="section-title" style={{ marginTop: 0 }}>
-          Con qué se acreditó · {credits.length === 1 ? 'una fila del extracto' : `${credits.length} filas del extracto`}
-        </div>
+      <Collapsible
+        title="Con qué se acreditó"
+        count={
+          credits.length === 1 ? 'una fila del extracto' : `${credits.length} filas del extracto`
+        }
+      >
         {credits.length === 0 ? (
           <p className="muted">Ningún crédito del banco quedó asignado a esta liquidación.</p>
         ) : (
           <MovementTable movements={credits} />
         )}
-      </div>
+      </Collapsible>
 
       {rejected.length > 0 && (
-        <div>
-          <div className="section-title" style={{ marginTop: 0 }}>
-            Créditos que se miraron y se descartaron
-          </div>
-          <p className="faint" style={{ marginTop: -4 }}>
-            Todos los créditos del banco que caían en la ventana. Se descartaron por el motivo de
-            la última columna; un <code>AMOUNT_MISMATCH</code> significa que la diferencia contra
-            el bruto no se puede explicar como comisión.
-          </p>
+        <Collapsible
+          title="Créditos que se miraron y se descartaron"
+          count={`${rejected.length}`}
+        >
           <div className="table-wrap">
             <table>
               <thead>
@@ -94,7 +93,7 @@ export function SettlementDetail({ match }: { match: ReconciliationDto }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </Collapsible>
       )}
     </div>
   );

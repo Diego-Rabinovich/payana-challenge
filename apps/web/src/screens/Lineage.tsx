@@ -100,10 +100,6 @@ export function Lineage() {
               </p>
             )}
 
-            <p className="faint" style={{ marginTop: 16 }}>
-              El neto atribuido es la parte proporcional de este pago sobre el giro del lote. Las
-              partes de un lote suman exactamente lo acreditado, sin perder ni inventar un centavo.
-            </p>
           </div>
         );
       }}

@@ -63,8 +63,7 @@ export function NewRun() {
       <div className="card">
         <h2 className="card__title">Fases 2 y 3 · Conciliar</h2>
         <p className="card__hint">
-          Elegí el período. Se ingieren las tres fuentes, se cruza Wompi contra el banco y después
-          el ledger contra Odoo. Nada se escribe en el ERP.
+          Elegí el período.
         </p>
 
         <div className="filters">
