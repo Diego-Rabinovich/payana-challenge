@@ -267,11 +267,6 @@ function Row({
         <td>{line.date}</td>
         <td>
           <StatusChip status={line.status} />
-          {escrito && (
-            <div>
-              <span className="chip chip--ambiguous">asiento creado</span>
-            </div>
-          )}
         </td>
         <td>
           {line.descriptor ?? '—'}
@@ -279,12 +274,7 @@ function Row({
         </td>
         <td className="muted">{MATCH_LEVEL[line.matchLevel]}</td>
         <td className="mono">
-          {line.erpEntryName ?? '—'}
-          {line.erpEntryState === 'draft' && (
-            <div>
-              <span className="chip chip--ambiguous">borrador</span>
-            </div>
-          )}
+          <Asiento line={line} escrito={escrito} />
         </td>
         <td className="num">{show(line.ledgerAmount)}</td>
         <td className="num">{show(line.erpAmount)}</td>
@@ -297,10 +287,10 @@ function Row({
             <div style={{ display: 'grid', gap: 14 }}>
               {line.erpEntryState === 'draft' && (
                 <p className="banner banner--warn" style={{ margin: 0 }}>
-                  El asiento <code>{line.erpEntryName}</code> está en{' '}
-                  <strong>borrador</strong>: coincide con el ledger, pero todavía no está
-                  contabilizado, así que no suma en ningún balance y puede cambiar o borrarse.
-                  Para que cuente, alguien tiene que contabilizarlo en Odoo.
+                  El asiento <code>id {line.erpEntryId}</code> está en <strong>borrador</strong>:
+                  coincide con el ledger, pero todavía no está contabilizado, así que no suma en
+                  ningún balance y puede cambiar o borrarse. Para que cuente, alguien tiene que
+                  contabilizarlo en Odoo.
                 </p>
               )}
 
@@ -342,4 +332,30 @@ function Row({
       )}
     </>
   );
+}
+
+/**
+ * Qué hay del lado del ERP, en una sola línea.
+ *
+ * Tres estados distintos y una sola celda: el asiento contabilizado se nombra
+ * por su número, el borrador todavía no tiene número y se nombra por su id, y
+ * el que acabamos de crear no figura en este reporte — se escribió después de
+ * la corrida — pero conviene verlo sin abrir la fila, que es justamente para
+ * lo que está la marca.
+ */
+function Asiento({
+  line,
+  escrito,
+}: {
+  line: ErpReconciliationLineDto;
+  escrito: WrittenEntryDto | undefined;
+}) {
+  if (line.erpEntryState === 'draft') {
+    return <span className="chip chip--ambiguous">borrador · {line.erpEntryId}</span>;
+  }
+  if (line.erpEntryName) return <>{line.erpEntryName}</>;
+  if (escrito) {
+    return <span className="chip chip--ambiguous">creado · {escrito.entryId}</span>;
+  }
+  return <>—</>;
 }
