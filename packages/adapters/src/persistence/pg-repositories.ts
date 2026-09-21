@@ -66,6 +66,15 @@ export class PgRawRecordRepository implements RawRecordRepository {
 export class PgMovementRepository implements MovementRepository {
   constructor(private readonly db: PgClient) {}
 
+  /**
+   * Idempotente por el id, que es un hash del contenido.
+   *
+   * `run_id` se conserva en vez de pisarse: dice qué corrida trajo el
+   * movimiento al ledger, y eso no cambia porque una corrida posterior lo
+   * vuelva a ver. Con `excluded.run_id` significaba «la última que pasó por
+   * acá», que además hacía que borrar esa corrida dejara sin procedencia a
+   * movimientos que había traído otra.
+   */
   async upsertMany(movements: readonly Movement[]): Promise<{ inserted: number; updated: number }> {
     if (movements.length === 0) return { inserted: 0, updated: 0 };
 
@@ -78,7 +87,7 @@ export class PgMovementRepository implements MovementRepository {
              currency, counterparty, description, source_id, raw_record_id, locator,
              metadata, run_id
            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-           on conflict (id) do update set run_id = excluded.run_id`,
+           on conflict (id) do update set run_id = coalesce(movements.run_id, excluded.run_id)`,
           [
             movement.id,
             movement.accountId,
