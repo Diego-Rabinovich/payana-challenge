@@ -33,6 +33,13 @@ import type { Dependencies } from './composition.js';
  */
 export function buildReadModel(deps: Dependencies, version: string): ReadModel {
   const { repositories, accounts, useCases, ruleSet, accountMap, calendar } = deps;
+  const { channelAccounts, journalAccounts } = deps;
+  // El canal de quien no dice cuál: el primero del ruleset. Con uno solo, todo
+  // se comporta como antes.
+  const defaultChannel = ruleSet.channelKeys[0] ?? 'wompi';
+  /** El canal cuya cuenta es esa, o ninguno si es el banco u otra cosa. */
+  const channelOfAccount = (accountId: string): string | undefined =>
+    Object.keys(channelAccounts).find((key) => channelAccounts[key] === accountId);
   // The same directory the file connector reads, so an uploaded statement is
   // picked up by the next run with no further plumbing.
   const statementDir = deps.statementDir;
@@ -59,8 +66,11 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
    * contestaba con los números de otra, o con un 404 sobre algo que estaba
    * guardado.
    */
-  const flowOf = async (runId: string): Promise<ReconciliationReport | undefined> => {
-    const stored = await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi');
+  const flowOf = async (
+    runId: string,
+    channel: string = defaultChannel,
+  ): Promise<ReconciliationReport | undefined> => {
+    const stored = await repositories.reports.load<unknown>(asRunId(runId), 'flow', channel);
     return stored ? reviveFlowReport(stored) : undefined;
   };
 
@@ -128,12 +138,15 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         // para decir *por qué* dos movimientos están relacionados hace falta
         // un resultado, y el más útil es el de la corrida más reciente.
         const latest = await resolveRun(LATEST_RUN);
-        const batch = (await currentBatches()).find((candidate) =>
-          candidate.chargeIds.includes(charge.id),
-        );
+        const channel = channelOfAccount(charge.accountId);
+        const batch = channel
+          ? (await currentBatches(channel)).find((candidate) =>
+              candidate.chargeIds.includes(charge.id),
+            )
+          : undefined;
         const match =
           batch && latest
-            ? (await flowOf(latest))?.matches.find((m) => m.left.batchId === batch.id)
+            ? (await flowOf(latest, channel))?.matches.find((m) => m.left.batchId === batch.id)
             : undefined;
 
         return correlate({
@@ -159,12 +172,12 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       // Los lotes se reconstruyen del ledger, que es determinístico, y se
       // recortan al período que esa corrida pidió: los lotes de marzo no son
       // parte de una corrida de enero a febrero.
-      listBatches: async (runId) => batchesOf(runId),
-      findBatch: async (runId, batchId) =>
-        (await batchesOf(runId)).find((batch) => batch.id === batchId),
+      listBatches: async (runId, channel) => batchesOf(runId, channel),
+      findBatch: async (runId, batchId, channel) =>
+        (await batchesOf(runId, channel)).find((batch) => batch.id === batchId),
 
-      listReconciliations: async ({ status, runId }) => {
-        const report = await flowOf(runId);
+      listReconciliations: async ({ status, runId, channel }) => {
+        const report = await flowOf(runId, channel);
         const matches = report?.matches ?? [];
         if (!status) return matches;
 
@@ -175,10 +188,10 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
         return matches.filter((match) => match.status.toUpperCase() === wanted);
       },
 
-      findReconciliation: async (runId, matchId) =>
-        (await flowOf(runId))?.matches.find((match) => match.id === matchId),
+      findReconciliation: async (runId, matchId, channel) =>
+        (await flowOf(runId, channel))?.matches.find((match) => match.id === matchId),
 
-      flowReport: async (runId) => flowOf(runId),
+      flowReport: async (runId, channel) => flowOf(runId, channel),
     },
 
     erp: {
@@ -222,12 +235,13 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     },
 
     channels: {
-      list: async (runId) => {
-        const report = await flowOf(runId);
-        return ruleSet.channelKeys.map((key) =>
-          describeChannel(key, ruleSet, report?.matches ?? [], report?.calibration),
-        );
-      },
+      list: async (runId) =>
+        Promise.all(
+          ruleSet.channelKeys.map(async (key) => {
+            const report = await flowOf(runId, key);
+            return describeChannel(key, ruleSet, report?.matches ?? [], report?.calibration);
+          }),
+        ),
     },
 
     statements: {
@@ -244,12 +258,12 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       resolve: async (runId) => resolveRun(runId),
       start: async ({ from, to }) => runPipeline(from, to),
       reportArtifact: async (runId, format) => {
-        const stored = await repositories.reports.load<unknown>(asRunId(runId), 'flow', 'wompi');
-        if (!stored) return undefined;
-        const flow = reviveFlowReport(stored);
+        // El artefacto todavía cuenta un solo canal de la fase 2: el primero.
+        const flow = await flowOf(runId);
+        if (!flow) return undefined;
 
         const erp: Record<string, ErpReconciliationReport> = {};
-        for (const journal of ['wompi', 'bancolombia']) {
+        for (const journal of Object.keys(journalAccounts)) {
           const saved = await repositories.reports.load<unknown>(asRunId(runId), 'erp', journal);
           if (saved) erp[journal] = reviveErpReport(saved);
         }
@@ -277,9 +291,21 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
 
   // —— Helpers
 
-  async function currentBatches(): Promise<SettlementBatch[]> {
-    const movements = await repositories.movements.findByAccount(accounts.wompi);
-    return buildSettlementBatches({ calendar, accountId: accounts.wompi, movements });
+  /**
+   * Los lotes de un canal, armados con su propia política —corte, cadencia,
+   * ventana—, que es la misma que usó la conciliación. Sin ella salían con el
+   * corte a medianoche y no coincidían con los lotes que la corrida concilió.
+   */
+  async function currentBatches(channel: string = defaultChannel): Promise<SettlementBatch[]> {
+    const accountId = channelAccounts[channel];
+    if (!accountId) return [];
+    const movements = await repositories.movements.findByAccount(accountId);
+    return buildSettlementBatches({
+      calendar,
+      accountId,
+      movements,
+      policy: ruleSet.settlementPolicyFor(channel),
+    });
   }
 
   /**
@@ -289,9 +315,9 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
    * se recortan al rango que la corrida pidió. Sin el recorte, una corrida de
    * enero a febrero listaría lotes de abril que nunca miró.
    */
-  async function batchesOf(runId: string): Promise<SettlementBatch[]> {
+  async function batchesOf(runId: string, channel?: string): Promise<SettlementBatch[]> {
     const run = await repositories.runs.findById(asRunId(runId));
-    const all = await currentBatches();
+    const all = await currentBatches(channel);
     if (!run) return [];
 
     const { from, to } = run.range;
@@ -304,14 +330,16 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
     const charge = await repositories.movements.findById(asMovementId(movementId));
     if (!charge) return undefined;
 
-    const batches = await currentBatches();
+    const channel = channelOfAccount(charge.accountId);
+    if (!channel) return undefined;
+    const batches = await currentBatches(channel);
     const batch = batches.find((candidate) => candidate.chargeIds.includes(charge.id));
     if (!batch) return undefined;
 
     const charges = await chargesOf(batch);
     const latest = await resolveRun(LATEST_RUN);
     const match = latest
-      ? (await flowOf(latest))?.matches.find((m) => m.left.batchId === batch.id)
+      ? (await flowOf(latest, channel))?.matches.find((m) => m.left.batchId === batch.id)
       : undefined;
     // The first credit is the one a lineage view follows; a split settlement
     // is shown in full on the reconciliation screen, not here.
@@ -355,33 +383,42 @@ export function buildReadModel(deps: Dependencies, version: string): ReadModel {
       await useCases.ingest.execute({ sourceId, range, runId });
     }
 
-    const flowReport = await useCases.reconcileFlow.execute({
-      gatewayAccountId: accounts.wompi,
-      bankAccountId: accounts.bank,
-      channel: 'wompi',
-      range,
-      runId,
-    });
-    await repositories.reports.save({
-      runId,
-      kind: 'flow',
-      scope: 'wompi',
-      rulesetVersion: ruleSet.version,
-      report: flowReport,
-    });
+    // Fase 2, una vez por canal del ruleset que tenga una fuente registrada.
+    const flows: Record<string, ReconciliationReport> = {};
+    for (const channel of ruleSet.channelKeys) {
+      const gatewayAccountId = channelAccounts[channel];
+      if (!gatewayAccountId) continue;
 
-    for (const journalKey of ['wompi', 'bancolombia'] as const) {
+      const flowReport = await useCases.reconcileFlow.execute({
+        gatewayAccountId,
+        bankAccountId: accounts.bank,
+        channel,
+        range,
+        runId,
+      });
+      await repositories.reports.save({
+        runId,
+        kind: 'flow',
+        scope: channel,
+        rulesetVersion: ruleSet.version,
+        report: flowReport,
+      });
+      flows[channel] = flowReport;
+    }
+
+    for (const [journalKey, accountId] of Object.entries(journalAccounts)) {
       const journal = accountMap.journal(journalKey);
       if (!journal) continue;
 
+      // Sólo el diario de un canal recibe sus liquidaciones: ahí van las
+      // deducciones de cada una. La fase 2 ya terminó; esto la lee, no la cambia.
+      const settlements = flows[journalKey]?.matches;
       const erpReport = await useCases.reconcileErp.execute({
-        accountId: journalKey === 'wompi' ? accounts.wompi : accounts.bank,
+        accountId,
         journalKey,
         range,
         runId,
-        // Sólo el diario del canal: ahí van las deducciones de cada liquidación.
-        // La fase 2 ya terminó; esto la lee, no la cambia.
-        ...(journalKey === 'wompi' ? { settlements: flowReport.matches } : {}),
+        ...(settlements ? { settlements } : {}),
       });
       await repositories.reports.save({
         runId,

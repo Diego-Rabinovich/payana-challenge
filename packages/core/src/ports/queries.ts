@@ -80,12 +80,24 @@ export interface LedgerQueries {
  * id concreto, que después viaja en la respuesta. Lo implícito se volvió
  * explícito sin perder el atajo.
  */
+/**
+ * Cada corrida concilia todos los canales del ruleset y guarda un reporte por
+ * canal. `channel` es la clave de ese canal; sin ella, el primero del ruleset.
+ */
 export interface FlowQueries {
-  listBatches(runId: string): Promise<readonly SettlementBatch[]>;
-  findBatch(runId: string, batchId: string): Promise<SettlementBatch | undefined>;
-  listReconciliations(input: { runId: string; status?: string }): Promise<readonly MatchResult[]>;
-  findReconciliation(runId: string, matchId: string): Promise<MatchResult | undefined>;
-  flowReport(runId: string): Promise<ReconciliationReport | undefined>;
+  listBatches(runId: string, channel?: string): Promise<readonly SettlementBatch[]>;
+  findBatch(runId: string, batchId: string, channel?: string): Promise<SettlementBatch | undefined>;
+  listReconciliations(input: {
+    runId: string;
+    status?: string;
+    channel?: string;
+  }): Promise<readonly MatchResult[]>;
+  findReconciliation(
+    runId: string,
+    matchId: string,
+    channel?: string,
+  ): Promise<MatchResult | undefined>;
+  flowReport(runId: string, channel?: string): Promise<ReconciliationReport | undefined>;
 }
 
 export interface ErpQueries {

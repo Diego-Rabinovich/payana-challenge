@@ -57,6 +57,11 @@ const Paging = {
  */
 const RunParam = { runId: z.string().describe('Id de la corrida, o `latest`') };
 
+/** Qué canal de la fase 2. Sin él, el primero del ruleset. */
+const ChannelQuery = {
+  channel: z.string().optional().describe('Clave del canal en el ruleset; por defecto, el primero'),
+};
+
 const Range = {
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -98,6 +103,15 @@ export const reconciliationRoutes =
       return resolved;
     };
 
+    /** Un canal que el ruleset no declara es un 404, no el de otro canal. */
+    const channelOf = (requested?: string): string => {
+      const channel = requested ?? ruleSet.channelKeys[0];
+      if (!channel || !ruleSet.channelKeys.includes(channel)) {
+        throw new NotFoundError(`Channel ${requested}`);
+      }
+      return channel;
+    };
+
     app.get(
       '/runs/:runId/summary',
       {
@@ -105,15 +119,17 @@ export const reconciliationRoutes =
           tags: ['reconciliation'],
           summary: 'The funnel and the counts. What the panel is built from',
           params: z.object(RunParam),
+          querystring: z.object(ChannelQuery),
           response: { 200: ReconciliationSummaryDto },
         },
       },
       async (request) => {
-        const report = await flow.flowReport(await scope(request.params.runId));
+        const channel = channelOf(request.query.channel);
+        const report = await flow.flowReport(await scope(request.params.runId), channel);
         if (!report) throw new NotFoundError(`Run ${request.params.runId} has no phase-2 report`);
 
         return toReconciliationSummaryDto(report, ruleSet.version, (counterparty) =>
-          ruleSet.isChannelCounterparty('wompi', counterparty),
+          ruleSet.isChannelCounterparty(channel, counterparty),
         );
       },
     );
@@ -125,7 +141,7 @@ export const reconciliationRoutes =
           tags: ['reconciliation'],
           summary: 'One row per settlement: what was sold, deducted and received',
           params: z.object(RunParam),
-          querystring: z.object({ ...Range, ...Paging }),
+          querystring: z.object({ ...ChannelQuery, ...Range, ...Paging }),
           response: {
             200: z.object({ batches: z.array(SettlementBatchDto), page: OffsetPageDto }),
           },
@@ -133,7 +149,8 @@ export const reconciliationRoutes =
       },
       async (request) => {
         const { from, to, limit, offset } = request.query;
-        const all = (await flow.listBatches(await scope(request.params.runId)))
+        const channel = channelOf(request.query.channel);
+        const all = (await flow.listBatches(await scope(request.params.runId), channel))
           .map(toSettlementBatchDto)
           .filter((batch) => withinRange(batch.batchDate, from, to));
 
@@ -148,12 +165,14 @@ export const reconciliationRoutes =
         schema: {
           tags: ['reconciliation'],
           params: z.object({ ...RunParam, batchId: z.string() }),
+          querystring: z.object(ChannelQuery),
           response: { 200: SettlementBatchDto },
         },
       },
       async (request) => {
         const runId = await scope(request.params.runId);
-        const batch = await flow.findBatch(runId, request.params.batchId);
+        const channel = channelOf(request.query.channel);
+        const batch = await flow.findBatch(runId, request.params.batchId, channel);
         if (!batch) throw new NotFoundError(`Batch ${request.params.batchId}`);
         return toSettlementBatchDto(batch);
       },
@@ -166,7 +185,7 @@ export const reconciliationRoutes =
           tags: ['reconciliation'],
           summary: 'Channel-to-bank results; filter by status for the exception queue',
           params: z.object(RunParam),
-          querystring: z.object({ status: StatusFilter, ...Range, ...Paging }),
+          querystring: z.object({ status: StatusFilter, ...ChannelQuery, ...Range, ...Paging }),
           response: {
             200: z.object({ reconciliations: z.array(ReconciliationDto), page: OffsetPageDto }),
           },
@@ -177,6 +196,7 @@ export const reconciliationRoutes =
         const all = (
           await flow.listReconciliations({
             runId: await scope(request.params.runId),
+            channel: channelOf(request.query.channel),
             ...(request.query.status ? { status: request.query.status } : {}),
           })
         )
@@ -199,12 +219,17 @@ export const reconciliationRoutes =
             'emparejamiento y no un resultado: el mismo id puede tener otro score bajo otra ' +
             'corrida. Por eso el alcance va en el path y no admite default.',
           params: z.object({ ...RunParam, matchId: z.string() }),
+          querystring: z.object(ChannelQuery),
           response: { 200: ReconciliationDto },
         },
       },
       async (request) => {
         const runId = await scope(request.params.runId);
-        const match = await flow.findReconciliation(runId, request.params.matchId);
+        const match = await flow.findReconciliation(
+          runId,
+          request.params.matchId,
+          channelOf(request.query.channel),
+        );
         if (!match) throw new NotFoundError(`Reconciliation ${request.params.matchId}`);
         return toReconciliationDto(match);
       },
@@ -220,6 +245,7 @@ export const reconciliationRoutes =
             'What a settlement is, spelled out: the gateway charges due on one day, and the bank ' +
             'rows they arrived in. Enough to check the arithmetic by hand against a statement.',
           params: z.object({ ...RunParam, matchId: z.string() }),
+          querystring: z.object(ChannelQuery),
           response: {
             200: z.object({
               charges: z.array(MovementDto),
@@ -237,7 +263,11 @@ export const reconciliationRoutes =
       },
       async (request) => {
         const runId = await scope(request.params.runId);
-        const match = await flow.findReconciliation(runId, request.params.matchId);
+        const match = await flow.findReconciliation(
+          runId,
+          request.params.matchId,
+          channelOf(request.query.channel),
+        );
         if (!match) throw new NotFoundError(`Reconciliation ${request.params.matchId}`);
 
         const [charges, credits] = await Promise.all([
@@ -280,9 +310,9 @@ export const reconciliationRoutes =
             // reconciliation finding; the rest is noise the CFO may still want
             // to see, so it is filtered rather than dropped.
             channel: z
-              .enum(['wompi', 'other', 'all'])
-              .default('wompi')
-              .describe('Whose credits to return. Defaults to the channel being reconciled'),
+              .string()
+              .optional()
+              .describe("Whose credits: a channel key, 'other' or 'all'. Defaults to the first channel"),
             ...Range,
             ...Paging,
           }),
@@ -292,16 +322,21 @@ export const reconciliationRoutes =
         },
       },
       async (request) => {
-        const { from, to, limit, offset, channel } = request.query;
-        const report = await flow.flowReport(await scope(request.params.runId));
+        const { from, to, limit, offset } = request.query;
+        const requested = request.query.channel;
+        const wide = requested === 'all' || requested === 'other';
+        // Con `all` u `other` se mira el reporte del primer canal; con un canal,
+        // el suyo. Los créditos de otro canal se reconocen por su contraparte.
+        const channel = channelOf(wide ? undefined : requested);
+        const report = await flow.flowReport(await scope(request.params.runId), channel);
 
         const all = (report?.unattributed ?? [])
           .map(toUnattributedCreditDto)
           .filter((credit) => withinRange(credit.valueDate, from, to))
           .filter((credit) => {
-            if (channel === 'all') return true;
-            const mine = ruleSet.isChannelCounterparty('wompi', credit.counterparty);
-            return channel === 'wompi' ? mine : !mine;
+            if (requested === 'all') return true;
+            const owner = ruleSet.channelFor(credit.counterparty);
+            return requested === 'other' ? owner === undefined : owner === channel;
           });
 
         const { items, ...rest } = page(all, { limit, offset });
@@ -321,7 +356,7 @@ export const reconciliationRoutes =
             'dictar cuentas ni montos. El alcance de la escritura sale del plan de cuentas en ' +
             'config/odoo-accounts.json — un diario que no esté ahí no se puede tocar.',
           body: z.object({
-            journalKey: z.enum(['wompi', 'bancolombia']),
+            journalKey: z.string(),
             ref: z.string().startsWith('mov:'),
             // La corrección se reconstruye del reporte de una corrida, así que
             // cuál es una entrada de la operación, no un filtro opcional.
@@ -357,7 +392,7 @@ export const reconciliationRoutes =
             'Se le pregunta a Odoo, no a una anotación nuestra: si alguien contabilizó o borró ' +
             'el asiento, la respuesta cambia. La consola lo usa para marcar en la tabla lo que ' +
             'ya se creó, de manera que la marca sobreviva a recargar la página.',
-          querystring: z.object({ journalKey: z.enum(['wompi', 'bancolombia']) }),
+          querystring: z.object({ journalKey: z.string() }),
           response: { 200: z.object({ entries: z.array(WrittenEntryDto) }) },
         },
       },
@@ -403,7 +438,7 @@ export const reconciliationRoutes =
         schema: {
           tags: ['erp'],
           summary: 'Ledger against its formal book, line by line, with the correction each implies',
-          params: z.object({ ...RunParam, journalKey: z.enum(['wompi', 'bancolombia']) }),
+          params: z.object({ ...RunParam, journalKey: z.string() }),
           querystring: z.object({ status: z.string().optional() }),
           response: { 200: ErpReconciliationDto },
         },

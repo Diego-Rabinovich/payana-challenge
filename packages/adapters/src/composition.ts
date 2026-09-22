@@ -79,7 +79,11 @@ export interface Dependencies {
   readonly statementDir: string;
   readonly calendar: BusinessCalendar;
   readonly accounts: { readonly wompi: ReturnType<typeof accountId>; readonly bank: ReturnType<typeof accountId> };
-  
+  /** La cuenta del ledger de cada canal del ruleset, por su clave. */
+  readonly channelAccounts: Readonly<Record<string, ReturnType<typeof accountId>>>;
+  /** La cuenta del ledger que se concilia contra cada diario del ERP, por su clave. */
+  readonly journalAccounts: Readonly<Record<string, ReturnType<typeof accountId>>>;
+
   readonly connectors: ConnectorRegistry;
   readonly repositories: {
     readonly movements: MovementRepository;
@@ -107,6 +111,10 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
     wompi: accountId('wompi:AA'),
     bank: accountId(`bancolombia:${config.bancolombiaAccountNumber}`),
   };
+  // Un canal nuevo agrega su línea acá, junto a su conector y su parser. La
+  // clave es la de su bloque en el ruleset y la de su diario en el plan.
+  const channelAccounts = { wompi: accounts.wompi };
+  const journalAccounts = { ...channelAccounts, bancolombia: accounts.bank };
   const db = new PgClient(config.databaseUrl);
   await db.migrate();
 
@@ -159,6 +167,8 @@ export async function buildDependencies(config: AppConfig): Promise<Dependencies
     statementDir,
     calendar,
     accounts,
+    channelAccounts,
+    journalAccounts,
     connectors,
     repositories,
     erp,
